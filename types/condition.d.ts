@@ -1,0 +1,1 @@
+export type Condition = 'blinded' | 'charmed' | 'deafened' | 'frightened' | 'grappled' | 'incapacitated' | 'invisible' | 'paralyzed' | 'poisoned' | 'petrified' | 'prone' | 'restrained' | 'stunned' | 'unconscious' | 'dazed';
