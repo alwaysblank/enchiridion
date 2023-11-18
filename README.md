@@ -17,5 +17,8 @@ The plugin may later expand to support alternate data sources, such as frontmatt
 
 ### Parsing
 
-A separate document details how the internal parser will work: [Markdown Parsing](./markdown-parsing.md).
+The internal parser works in two phases:
+
+- [Markdown Parser](./markdown-parsing.md)
+- [D&D Parser](./dnd-parsing.md)
 

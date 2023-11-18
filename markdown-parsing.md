@@ -66,6 +66,52 @@ For example:
 }
 ```
 
+Any punctuation between the key and value will be removed by the parser, allowing for flexibility in the representation:
+
+```markdown
+- **Strength:** 10
+- **Dexterity**: 14
+- **Constitution** - 12
+```
+
+```json
+{
+  "strength": 10,
+  "dexterity": 14,
+  "constitution": 12
+}
+```
+
+## Arrays
+
+Lists that **do not** include key-value paris parse will be parsed as arrays where the value of each list item is a row in the array.
+For example:
+
+```markdown
+## Stats
+
+- **Strength** 10
+- **Intelligence** 16
+
+## Languages
+
+- Common
+- Abyssal
+```
+
+```json
+{
+  "stats": {
+    "strength": 10,
+    "intelligence": 16
+  },
+  "languages": [
+    "Common",
+    "Abyssal"
+  ]
+}
+```
+
 ## Combining
 
 One of the primary features we want to enable is combining multiple documents.
