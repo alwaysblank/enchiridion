@@ -112,6 +112,31 @@ For example:
 }
 ```
 
+An array must have a parent that is a section, so arrays _must_ appear in a format like this:
+
+```markdown
+## Languages
+- Common
+- Abyssal
+
+- Resistances
+  - Lightning
+  - Psychic
+```
+
+```json
+{
+  "languages": [
+    "Common",
+    "Abyssal"
+  ],
+  "resistances": [
+    "Lightning",
+    "Psychic"
+  ]
+}
+```
+
 ## Combining
 
 One of the primary features we want to enable is combining multiple documents.
@@ -148,3 +173,24 @@ Melee Weapon Attack, +5 to hit, 10ft reach, one target.
 > 
 > In these examples, title caps are converted into lowercase.
 > In practice, data objects will use all lower case for keys, but will be smart enough to convert from title caps or certain abbreviations.
+
+---
+- every node we insert into our tree will need a key
+- that's just how JSON works
+- so how do we determine the key?
+  - HEADINGS: The heading text is the key, and initially the value is an empty object (or, potentially, an array)
+  - PARAGRAPH (or other plain text): No key of its own; key will come from whatever the parent element is (usually a HEADING)
+  - KEY-VALUE LISTS: Each item in the list provides its own key and value.
+  - ARRAY LISTS: Like paragraphs, these rely on the parent element for their key
+- Effectively, we have two types of nodes:
+  - PROVIDE THEIR OWN KEY: Headings, key-value lists
+  - INHERIT KEY FROM PARENT: Paragraph, array lists
+- What can provide a key:
+  - A heading
+  - `<strong>` element at the head of a `<p>` element
+  - a plain-text list item that contains a sublist
+  - table heading
+- Apart from headings, all of these are self-contained: We can look at the element and it's children in the AST, and determine that it will provide its own key (or won't)
+- Headings already have applicable code
+- any element that provides its own key should return an object, which will be merged w/ the spread operator
+- any element that does _not_ provide its own key should return either an array, or a string--but in general we won't have these, since key-providers will usually contain them
