@@ -1,8 +1,8 @@
-import {App, TFile} from 'obsidian';
+import {App, getLinkpath, HeadingCache, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
 import {Heading as MarkdownHeading, List, ListItem, Root, RootContent} from 'mdast';
 import {toString} from 'mdast-util-to-string';
-import {get, set, merge, snakeCase} from 'lodash';
+import {get, set, snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {replaceKey} from '../utils';
 
@@ -120,13 +120,82 @@ export default class Marcus {
 	}
 
 	async parseFile( file: TFile, parseFrontmatter = false ) {
-		const {frontmatter} = this.app.metadataCache.getFileCache(file) || {};
-		const doc = await this.app.vault.cachedRead( file );
-		const parsedContent = this.parseDocument(doc);
-		if (frontmatter && parseFrontmatter) {
-			return merge(parsedContent, replaceKey(k => this.normalizeKey(k))(frontmatter))
+		const {embeds} = this.app.metadataCache.getFileCache(file) || {};
+		let doc = await this.app.vault.cachedRead( file );
+
+		// Collected all the content chunks for embeds so we can easily get them later.
+		const embedContent = await Promise.all( (embeds || []).map( async embed => {
+			const {original, link} = embed;
+			const {subpath} = parseLinktext(link);
+			let content = '';
+			const thisFile = this.app.metadataCache.getFirstLinkpathDest(getLinkpath(link), file.path);
+			if (!thisFile) {
+				return {original, content}
+			}
+			if (subpath) {
+				const section = resolveSubpath(this.app.metadataCache.getFileCache(thisFile) || {}, subpath)
+				if (section.type === 'heading') {
+					content = await this.getSectionText(section.current.heading, thisFile);
+				}
+			} else {
+				content = await this.app.vault.cachedRead(thisFile);
+			}
+			return {original, content};
+		}) );
+
+		// If there are embeds to replace, use a regex to do so.
+		if (embedContent.length > 0) {
+			doc = doc.replaceAll(/(?:!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\])/g, (original) => {
+				const embedData = embedContent.find(entry => { return entry.original === original })
+
+				if (typeof embedData === 'undefined') {
+					return original;
+				}
+
+				return embedData.content
+			});
 		}
-		return parsedContent
+
+		// Parse document that has been enhanced with includes.
+		return this.parseDocument(doc);
+	}
+
+	async getSectionText( name: string, file: TFile ) {
+		const {headings} = this.app.metadataCache.getFileCache(file) || {};
+		if (!headings) {
+			// There are no headings to define sections.
+			return ''
+		}
+		let startLine = -1;
+		let endLine = -1;
+		let i = 0;
+		while (headings[i] && headings[i].heading !== name) {
+			i++
+		}
+		if (!headings[i]) {
+			return '';
+		}
+		const requestedHeading = headings[i];
+		startLine = requestedHeading.position.start.line;
+		i++; // Move to the next heading to start testing.
+		while (headings[i] && headings[i].level > requestedHeading.level) {
+			i++
+		}
+		if (!headings[i]) {
+			// we reached the end of the file, so return everything after the startLine.
+			endLine = Infinity;
+		} else {
+			endLine = headings[i].position.start.line;
+		}
+
+		if ( startLine < 0 || endLine < 0 ) {
+			// this isn't a valid segment.
+			return '';
+		}
+		const document = await this.app.vault.cachedRead(file);
+		const byLine = document.split('\n');
+		const section = byLine.slice(startLine, endLine);
+		return section.join('\n');
 	}
 
 	parseDocument( document: string, parseFrontmatter = false ) {
