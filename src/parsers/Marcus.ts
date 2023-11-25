@@ -1,10 +1,13 @@
 import {App, getLinkpath, HeadingCache, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
-import {Heading as MarkdownHeading, List, ListItem, Root, RootContent} from 'mdast';
+import {Heading, Heading as MarkdownHeading, HeadingData, List, ListItem, Root, RootContent} from 'mdast';
 import {toString} from 'mdast-util-to-string';
 import {get, set, snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {replaceKey} from '../utils';
+import {commentMarker} from 'mdast-comment-marker'
+import {visitParents} from 'unist-util-visit-parents';
+import {selectAll} from 'unist-util-select';
 
 type ParsedHeadingContent = {
 	key: string,
@@ -205,7 +208,19 @@ export default class Marcus {
 			doc = doc.replace(/---\n.*?\n---/s, '')
 		}
 		const tree = fromMarkdown(doc)
-		return this.parseTree(tree);
+		console.log(this.extractAllSections(tree))
+		// const indexOf = tree.children.findIndex(node => {
+		// 	return node.type === 'heading' && toString(node) === 'Actions';
+		// })
+		// if ( indexOf >= 0) {
+		// 	const sliced = tree.children.slice(indexOf);
+		// 	const section = [];
+		// 	let i = 1;
+		// 	while (sliced[i] && (sliced[i].type !== 'heading' || sliced[i].depth > tree.children[indexOf].depth)) {
+		// 		section.push(sliced[i])
+		// 		i++
+		// 	}
+		// }
 	}
 
 	parseTree( tree: Root ) {
@@ -277,6 +292,53 @@ export default class Marcus {
 		return result;
 	}
 
+	extractTreeSection( tree: Root, name: string ): any {
+		const result = [];
+		let currentHeading: Heading|null = null;
+		let accumulator = [];
+		const nodes = tree.children;
+		for (let i = 0; i < nodes.length; i++) {
+			if(nodes[i].type === 'heading' && toString(nodes[i]) === name ) {
+				currentHeading = nodes[i] as Heading;
+				accumulator = [];
+				console.log(`starting heading ${toString(currentHeading)}`, nodes[i])
+				continue;
+			}
+			if(nodes[i].type === 'heading' && currentHeading && (nodes[i] as Heading).depth <= currentHeading.depth ) {
+				// We're no longer "inside" the selected Section.
+				currentHeading = null;
+				result.push(accumulator);
+				continue;
+			}
+			if (currentHeading) {
+				accumulator.push(nodes[i]);
+			}
+		}
+		return result;
+	}
+
+	extractAllSections( tree: Root ) {
+		const nodes = tree.children;
+		const sections = new Map<RootContent, Array<RootContent>>()
+		let openSections: Array<Heading> = [];
+		for (let i = 0; i < nodes.length; i++) {
+			if(nodes[i].type === 'heading') {
+				// Remove 'closed' headings.
+				openSections = openSections.filter(heading => (nodes[i] as Heading).depth > heading.depth)
+				openSections.push(nodes[i] as Heading);
+				continue;
+			}
+			openSections.map(heading => {
+				let sectionContent = sections.get(heading);
+				if (!sectionContent) {
+					sectionContent = [];
+				}
+				sectionContent.push(nodes[i])
+				sections.set(heading, sectionContent);
+			})
+		}
+		return sections;
+	}
 
 	getArrayLast<T>( arr: Array<T> ): T {
 		return arr[arr.length -1];
