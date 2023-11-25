@@ -1,117 +1,16 @@
 import {App, getLinkpath, HeadingCache, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
-import {Heading, Heading as MarkdownHeading, Node, List, ListItem, Paragraph, Root, RootContent} from 'mdast';
+import {Heading, Heading as MarkdownHeading, List, ListItem, Paragraph, RootContent} from 'mdast';
+import {Node, Parent} from 'unist';
 import {toString} from 'mdast-util-to-string';
 import {get, set, snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
 
-type ParsedHeadingContent = {
-	key: string,
+
+type Section = Node & Parent & {
 	depth: number,
-};
-
-type ParsedArrayContent = Array<string>;
-
-type ParsedObjectContent = {
-	[index: string]: ParsedContent
-};
-
-type ParsedStringContent = string;
-
-/**
- * Exhaustive list of all types that can be in a section.
- */
-type SectionContent = Array<string> | string | object;
-
-type SectionMeta = {
-	name: string;
 }
-
-type ParsedContent = ParsedHeadingContent | ParsedArrayContent | ParsedObjectContent | ParsedStringContent
-type ParsedMeta = {
-	name?: string,
-}
-type ParsedType = 'array' | 'object' | 'string' | 'undefined';
-
-class Parsed<T> {
-	readonly content: T;
-	readonly type: ParsedType;
-	readonly meta?: ParsedMeta;
-
-
-	constructor(content: T, type: ParsedType, meta: ParsedMeta = {}) {
-		this.content = content;
-		this.type = type;
-		this.meta = meta;
-	}
-}
-
-class ParsedHeading extends Parsed<ParsedHeadingContent> {
-	content: ParsedHeadingContent | null = null;
-}
-
-class ParsedArray extends Parsed<ParsedArrayContent> {
-	content: ParsedArrayContent | null = null;
-
-	constructor(content: ParsedArrayContent) {
-		super(content);
-	}
-}
-
-class ParsedObject extends Parsed<ParsedObjectContent> {
-	content: ParsedObjectContent | null = null;
-}
-
-class ParsedString extends Parsed<ParsedStringContent> {
-	content: ParsedStringContent | null = null;
-}
-
-export class Section {
-	name: string;
-	#content: SectionContent|undefined = undefined;
-
-
-	constructor({ name }: SectionMeta) {
-		this.name = name;
-	}
-
-	update( parsedValue: Parsed<ParsedContent> ) {
-		switch (parsedValue.type) {
-			case 'string':
-				this.#content = `${String.isString(this.content) ? `${this.content}\n` : ''}${parsedValue.content as ParsedStringContent}`;
-				break;
-			case 'array':
-				this.#content = [...Array.isArray(this.content) ? this.content : [], ...parsedValue.content as ParsedArrayContent]
-				break;
-			case 'object':
-				this.#content = {...typeof this.content === 'object' ? this.content : {}, ...parsedValue.content as ParsedObjectContent}
-				break;
-			default:
-				console.error('Cannot determine content type, so I don\'t know how to add it.', parsedValue);
-				break;
-		}
-	}
-
-	type() : 'array' | 'string' | 'object' | 'empty' | 'unknown' {
-		switch (typeof this.#content) {
-			case 'undefined':
-				return 'empty';
-			case 'string':
-				return 'string';
-			case 'object':
-				return Array.isArray(this.#content) ? 'array' : 'object';
-			default:
-				return 'unknown';
-		}
-	}
-
-	get content() {
-		return this.#content;
-	}
-}
-
-
 
 export default class Marcus {
 	app: App;
@@ -204,8 +103,54 @@ export default class Marcus {
 			// Strip the frontmatter from the string.
 			doc = doc.replace(/---\n.*?\n---/s, '')
 		}
-		const tree = fromMarkdown(doc)
-		console.log(this.extractAllSections(u('root', tree.children.map(child => this.processNode(child)))));
+		const tree = fromMarkdown(doc);
+		const nodes = tree.children.map(child => this.processNode(child));
+		const stack: Array<Section> = [];
+		for (let i = 0; i < nodes.length; i++) {
+			let tip = stack.pop();
+			if(nodes[i].type === 'heading') {
+				const section: Section = {...(nodes[i] as Node & {depth: number}), children: []};
+				if (tip) {
+					while (tip.depth >= section.depth) {
+						const parent = stack.pop() as Section;
+						parent.children.push(tip);
+						tip = parent;
+					}
+
+					// We're a level below, so add as a child and proceed.
+					stack.push(tip);
+					stack.push(section);
+				} else {
+					// This is the top level.
+					stack.push(section);
+				}
+			} else {
+				// console.log(tip, stack);
+				if (tip) {
+					tip.children.push(nodes[i]);
+					stack.push(tip);
+				} else {
+					console.error('Expected a parent but could not find one!');
+				}
+			}
+		}
+		if (stack.length < 1) {
+			// Nothing to return.
+			return null;
+		}
+		while(stack.length > 1) {
+			const oldSection = stack.pop();
+			if (oldSection) {
+				const parent = stack.pop();
+				if (parent) {
+					parent.children.push(oldSection);
+					stack.push(parent);
+				}
+			}
+		}
+		return stack[0];
+
+		// console.log(this.extractAllSections(u('root', tree.children.map(child => this.processNode(child)))));
 		// console.log(this.extractAllSections(tree))
 		// const indexOf = tree.children.findIndex(node => {
 		// 	return node.type === 'heading' && toString(node) === 'Actions';
@@ -221,99 +166,6 @@ export default class Marcus {
 		// }
 	}
 
-	parseTree( tree: Root ) {
-		const path: {sectionName: string, depth: number}[] = [];
-		const result: object = {};
-		const getPath = () => {
-			return path.map(p => this.normalizeKey(p.sectionName));
-		}
-		tree.children.forEach( node => {
-			const parsed = this.processNode(node);
-			console.log(parsed);
-			let thisSegment: any = {};
-
-			if (typeof parsed.content === 'undefined' || parsed.content === null) {
-				return;
-			}
-			if ( parsed.content ) {
-				const {depth, sectionName} = parsed.content
-				const {depth: currentDepth} = this.getArrayLast( path ) || {};
-				if (1 === depth) {
-					// Top-level heading is a special case.
-					set(result, ['name'], sectionName)
-					return;
-				}
-				if ( path.length > 0 && currentDepth >= depth ) {
-					while( this.getArrayLast( path ) && this.getArrayLast( path ).depth >= depth ) {
-						path.pop()
-					}
-				}
-				path.push({sectionName, depth});
-				thisSegment = new Section({name:sectionName})
-			} else {
-				const original: string | Section | undefined = get(result, getPath());
-				console.log(getPath(), path, result)
-				if (original instanceof Section) {
-					original.update(parsed);
-					thisSegment = original;
-				}
-				// if (original instanceof Section && typeof original.content !== 'undefined') {
-				// 	switch (original.type()) {
-				// 		case 'array':
-				// 			if (parsed instanceof ParsedArray && Array.isArray(original.content)) {
-				// 				thisSegment = [...original.content, ...parsed.content];
-				// 			} else {
-				// 				console.error('Array sections cannot have mixed content!', {original, parsed})
-				// 			}
-				// 			break;
-				// 		case 'string':
-				// 			if (parsed instanceof ParsedString && String.isString(original.content)) {
-				// 				thisSegment = `${original.content}\n${parsed.content}`;
-				// 			} else {
-				// 				console.error('String sections cannot have mixed content!', {original, parsed})
-				// 			}
-				// 			break;
-				// 		case 'object':
-				// 			if (parsed instanceof ParsedObject && typeof original.content === 'object') {
-				// 				thisSegment = {...original.content, ...parsed.content};
-				// 			} else {
-				// 				console.error('I got no idea what\'s going on here.', {original, parsed})
-				// 			}
-				// 			break;
-				// 		default:
-				// 			console.error('I don\'t know how to handle this type of content.', {original, parsed})
-				// 	}
-				// }
-			}
-			set(result, getPath(), thisSegment);
-		} );
-		return result;
-	}
-
-	extractTreeSection( tree: Root, name: string ): any {
-		const result = [];
-		let currentHeading: Heading|null = null;
-		let accumulator = [];
-		const nodes = tree.children;
-		for (let i = 0; i < nodes.length; i++) {
-			if(nodes[i].type === 'heading' && toString(nodes[i]) === name ) {
-				currentHeading = nodes[i] as Heading;
-				accumulator = [];
-				console.log(`starting heading ${toString(currentHeading)}`, nodes[i])
-				continue;
-			}
-			if(nodes[i].type === 'heading' && currentHeading && (nodes[i] as Heading).depth <= currentHeading.depth ) {
-				// We're no longer "inside" the selected Section.
-				currentHeading = null;
-				result.push(accumulator);
-				continue;
-			}
-			if (currentHeading) {
-				accumulator.push(nodes[i]);
-			}
-		}
-		return result;
-	}
 
 	extractAllSections( tree ) {
 		const nodes = tree.children;
@@ -338,8 +190,8 @@ export default class Marcus {
 		return sections;
 	}
 
-	getArrayLast<T>( arr: Array<T> ): T {
-		return arr[arr.length -1];
+	getArrayLast<T>( arr: Array<T> ): T|undefined {
+		return arr[arr.length -1] || undefined;
 	}
 
 	mergeObjectArray( arr: Array<{[index: string]: any}|null> ): {[index:string]: any} {
