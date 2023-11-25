@@ -1,13 +1,10 @@
 import {App, getLinkpath, HeadingCache, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
-import {Heading, Heading as MarkdownHeading, HeadingData, List, ListItem, Root, RootContent} from 'mdast';
+import {Heading, Heading as MarkdownHeading, Node, List, ListItem, Paragraph, Root, RootContent} from 'mdast';
 import {toString} from 'mdast-util-to-string';
 import {get, set, snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
-import {replaceKey} from '../utils';
-import {commentMarker} from 'mdast-comment-marker'
-import {visitParents} from 'unist-util-visit-parents';
-import {selectAll} from 'unist-util-select';
+import {u} from 'unist-builder'
 
 type ParsedHeadingContent = {
 	key: string,
@@ -208,7 +205,8 @@ export default class Marcus {
 			doc = doc.replace(/---\n.*?\n---/s, '')
 		}
 		const tree = fromMarkdown(doc)
-		console.log(this.extractAllSections(tree))
+		console.log(this.extractAllSections(u('root', tree.children.map(child => this.processNode(child)))));
+		// console.log(this.extractAllSections(tree))
 		// const indexOf = tree.children.findIndex(node => {
 		// 	return node.type === 'heading' && toString(node) === 'Actions';
 		// })
@@ -317,7 +315,7 @@ export default class Marcus {
 		return result;
 	}
 
-	extractAllSections( tree: Root ) {
+	extractAllSections( tree ) {
 		const nodes = tree.children;
 		const sections = new Map<RootContent, Array<RootContent>>()
 		let openSections: Array<Heading> = [];
@@ -353,7 +351,7 @@ export default class Marcus {
 		}, {})
 	}
 
-	processNode( node: RootContent ): Parsed<ParsedContent> {
+	processNode( node: RootContent ): Node {
 		switch (node.type) {
 			case 'list':
 				return this.processList(node)
@@ -363,81 +361,45 @@ export default class Marcus {
 			// case 'table':
 				// TODO
 			default:
-				return new Parsed<ParsedStringContent>(toMarkdown(node), 'string');
+				return u('text', toMarkdown(node))
 		}
 	}
 
-	processHeading( heading: MarkdownHeading ):  Parsed<ParsedHeadingContent> {
-		const name = toString(heading);
-		return new Parsed<ParsedHeadingContent>({
-			key: this.normalizeKey(this.cleanKey(name)),
-			depth: heading.depth,
-		}, 'object', {name: toString(heading)});
+	processHeading( heading: MarkdownHeading ) {
+		return u('heading', {depth: heading.depth}, toString(heading));
 	}
 
-	processList( list: List ): Parsed<ParsedObjectContent> | Parsed<ParsedArrayContent> {
+	processList( list: List ): Node {
 		const type = this.getListType(list);
 		switch (type) {
 			case 'array':
-				return new Parsed<ParsedArrayContent>(
-					list.children.map(child => toString(child)),
-					'array'
-				);
+				return u('array', list.children.map(node => u('row', toString(node))))
 			case 'key-value':
-				return new Parsed<ParsedObjectContent>(
-					this.mergeObjectArray(list.children.map(child => this.getListItemKeyValue(child))),
-					'object'
+				return u(
+					'key-value', list.children.map(node => {
+						const {key, value} = this.getListItemKeyValue(node) || {};
+						return u('pair', {key, value})
+					})
 				)
-			case 'mixed':
-				return new Parsed<ParsedObjectContent>(
-					this.mergeObjectArray(list.children.map( child => {
-					switch (this.getListItemType(child)) {
-						case 'key-value':
-							return this.getListItemKeyValue(child);
-						case 'nested':
-							return this.getlistItemNested(child);
-						default:
-							return null;
-					}
-				})),
-					'object'
-				);
-
 		}
-		return new Parsed<ParsedObjectContent>({}, 'object');
+		return u('empty');
 	}
 
-	getlistItemNested( listItem: ListItem ): null | object {
+	getListItemKeyValue( listItem: ListItem ): {key: string, value: string|Node} {
 		const {children} = listItem;
-		const key = children[0];
-		const nestedList = children[1];
-		if (nestedList?.type !== 'list' || typeof key === 'undefined') {
-			return null;
+		let key, value;
+		if (children.length > 1) {
+			// this is nested.
+			key = this.cleanKey(toString(children[0]));
+			value = this.processList(children[1] as List);
+		} else {
+			// this is not nested.
+			const text = (children[0] as Paragraph).children.map( child => toString( child ) );
+			key = text.shift() || '';
+			key = this.cleanKey(key);
+			value = this.cleanValue(text.join(' '));
 		}
-		let parsedKey = toString(key);
-		parsedKey = this.normalizeKey(this.cleanKey(parsedKey));
-
-		return { [parsedKey]: {...this.processList(nestedList)} }
-	}
-
-	getListItemKeyValue( listItem: ListItem ) {
-		const content = listItem.children[0] || null;
-		if ( ! content || content.type !== 'paragraph' ) {
-			// Currently we only support paragraphs and inner warppers.
-			return null
-		}
-		const children = content.children.map( child => toString( child ) );
-		let parsedKey = children.shift();
-		let parsedValue = children.join(' ');
-
-		if (typeof parsedKey === 'undefined' || parsedValue.length === 0) {
-			return null;
-		}
-
-		parsedKey = this.cleanKey(parsedKey);
-		parsedValue = this.cleanValue(parsedValue);
-
-		return { [parsedKey]: parsedValue };
+		return {key, value};
 	}
 
 	/**
@@ -465,7 +427,7 @@ export default class Marcus {
 			return 'invalid';
 		}
 
-		return 'mixed';
+		return 'key-value';
 	}
 
 	/**
