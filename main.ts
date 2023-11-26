@@ -2,11 +2,16 @@ import {App, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile} from 'obsi
 import Marcus from './src/parsers/Marcus';
 import Cache from './src/Cache'
 import Debug from './src/Debug';
+import Files from './src/Files';
 
 interface EnchiridionSettings {
 	debug: {
 		log: boolean,
 	}
+}
+
+export type EnhancedApp = App & {
+	appId: number, // This prop exists, but is not officially documented, so we must add it.
 }
 
 const DEFAULT_SETTINGS: EnchiridionSettings = {
@@ -16,16 +21,26 @@ const DEFAULT_SETTINGS: EnchiridionSettings = {
 }
 
 export default class Enchiridion extends Plugin {
+	app!: EnhancedApp;
 	settings: EnchiridionSettings = DEFAULT_SETTINGS;
-	marcus: Marcus = new Marcus(this.app);
-	cache: Cache = new Cache(this.app, this);
-	debug: Debug = new Debug(this.app, this);
+	marcus: Marcus = new Marcus(this);
+	cache: Cache = new Cache(this);
+	debug: Debug = new Debug(this);
+	files: Files = new Files(this);
 
 	/**
 	 * Runs whenever the plugin starts being used.
 	 */
 	async onload() {
 		await this.loadSettings();
+
+		/**
+		 * We start this early so it will sync data, but we don't await it
+		 * because we don't actually need the results.
+		 */
+		this.cache.sync();
+
+		this.hooks();
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EnchiridionSettingsTab(this.app, this));
@@ -38,7 +53,10 @@ export default class Enchiridion extends Plugin {
 			}
 		} )
 
-		this.hooks();
+		this.addRibbonIcon('info', 'Sync', () => {
+			this.cache.sync();
+		})
+
 	}
 
 	/**

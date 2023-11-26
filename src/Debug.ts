@@ -1,14 +1,11 @@
-import {App} from 'obsidian';
 import Enchiridion from '../main';
 
 export type MessageLevel = 'log' | 'info' | 'debug' | 'warning' | 'error';
 
 export default class Debug {
-	app: App;
 	plugin: Enchiridion;
 
-	constructor(app: App, plugin: Enchiridion) {
-		this.app = app;
+	constructor(plugin: Enchiridion) {
 		this.plugin = plugin;
 	}
 

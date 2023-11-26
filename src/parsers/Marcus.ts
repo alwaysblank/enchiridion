@@ -1,4 +1,4 @@
-import {App, getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
+import {getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
 import {Heading as MarkdownHeading, List, ListItem, Paragraph, RootContent} from 'mdast';
 import {Node, Parent} from 'unist';
@@ -7,6 +7,7 @@ import {snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
 import {normalizeHeadings} from 'mdast-normalize-headings'
+import Enchiridion from '../../main';
 
 export interface SectionNode extends Node, Parent {
 	type: 'section',
@@ -36,14 +37,15 @@ export interface EmptyNode extends Node {
 export type ValidNode = SectionNode|KeyNode|ValueNode|KeyValueNode|TextNode|EmptyNode;
 
 export default class Marcus {
-	app: App;
-	constructor( app: App ) {
-		this.app = app;
+	plugin: Enchiridion;
+
+	constructor(plugin: Enchiridion) {
+		this.plugin = plugin;
 	}
 
 	async parseFile( file: TFile) {
-		const {vault, metadataCache} = this.app;
-		// Collected all the content chunks for embeds so we can easily get them later.
+		const {vault, metadataCache} = this.plugin.app;
+		// Collected all the content chunks for embeds, so we can easily get them later.
 		const embedContent = await this.getEmbedContent(file)
 
 		let doc = await vault.cachedRead( file );
@@ -160,7 +162,8 @@ export default class Marcus {
 	}
 
 	async getEmbedContent( file: TFile ) {
-		const metacache = this.app.metadataCache.getFileCache(file);
+		const {metadataCache, vault} = this.plugin.app;
+		const metacache = metadataCache.getFileCache(file);
 		if (!metacache) {
 			return Promise.resolve([]);
 		}
@@ -168,24 +171,25 @@ export default class Marcus {
 			const {original, link} = embed;
 			const {subpath} = parseLinktext(link);
 			let content = '';
-			const thisFile = this.app.metadataCache.getFirstLinkpathDest(getLinkpath(link), file.path);
+			const thisFile = metadataCache.getFirstLinkpathDest(getLinkpath(link), file.path);
 			if (!thisFile) {
 				return {original, content}
 			}
 			if (subpath) {
-				const section = resolveSubpath(this.app.metadataCache.getFileCache(thisFile) || {}, subpath)
+				const section = resolveSubpath(metadataCache.getFileCache(thisFile) || {}, subpath)
 				if (section.type === 'heading') {
 					content = await this.getSectionText(section.current.heading, thisFile);
 				}
 			} else {
-				content = await this.app.vault.cachedRead(thisFile);
+				content = await vault.cachedRead(thisFile);
 			}
 			return {original, content};
 		}) );
 	}
 
 	async getSectionText( name: string, file: TFile ) {
-		const {headings} = this.app.metadataCache.getFileCache(file) || {};
+		const {metadataCache, vault} = this.plugin.app;
+		const {headings} = metadataCache.getFileCache(file) || {};
 		if (!headings) {
 			// There are no headings to define sections.
 			return ''
@@ -216,7 +220,7 @@ export default class Marcus {
 			// this isn't a valid segment.
 			return '';
 		}
-		const document = await this.app.vault.cachedRead(file);
+		const document = await vault.cachedRead(file);
 		const byLine = document.split('\n');
 		const section = byLine.slice(startLine, endLine);
 		return section.join('\n');
