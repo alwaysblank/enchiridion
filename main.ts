@@ -1,5 +1,6 @@
 import {App, Plugin, PluginSettingTab, Setting} from 'obsidian';
 import Marcus from './src/parsers/Marcus';
+import Cache from './src/Cache'
 // Remember to rename these classes and interfaces!
 
 interface EnchiridionSettings {
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS: EnchiridionSettings = {
 export default class Enchiridion extends Plugin {
 	settings: EnchiridionSettings
 	marcus: Marcus = new Marcus(this.app);
+	cache: Cache = new Cache(this.app, this)
 
 	/**
 	 * Runs whenever the plugin starts being used.
@@ -23,17 +25,12 @@ export default class Enchiridion extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EnchiridionSettingsTab(this.app, this));
 
-		this.addRibbonIcon( 'info', 'do the thing', async () => {
-			const { vault, metadataCache } = this.app;
-			const fileContents: string[] = await Promise.all(
-				vault.getMarkdownFiles().map(async (file) => {
-					// const doc = await vault.cachedRead( file );
-					console.log(await this.marcus.parseFile(file));
-					// console.log(metadataCache.getFileCache(file).fr);
-					// console.log(metadataCache.getFirstLinkpathDest('Another File', 'This is a file'))
-					// return this.parseAst( fromMarkdown( doc.replace( /---\n.*?\n---/s, '' ) ) );
-				})
-			);
+		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
+			const active = this.app.workspace.getActiveFile();
+			if (active) {
+				// const parsed = await this.marcus.parseFile(active);
+				console.log(await this.cache.getFile(active));
+			}
 		} )
 	}
 

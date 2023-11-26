@@ -6,33 +6,34 @@ import {toString} from 'mdast-util-to-string';
 import {snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
+import {normalizeHeadings} from 'mdast-normalize-headings'
 
-interface SectionNode extends Node, Parent {
+export interface SectionNode extends Node, Parent {
 	type: 'section',
 	depth: number,
 }
 
-interface KeyNode extends Node, Parent {
+export interface KeyNode extends Node, Parent {
 	type: 'key',
 }
 
-interface ValueNode extends Node, Parent {
+export interface ValueNode extends Node, Parent {
 	type: 'value',
 }
 
-interface KeyValueNode extends Node, Parent {
+export interface KeyValueNode extends Node, Parent {
 	type: 'key-value',
 }
 
-interface TextNode extends Node {
+export interface TextNode extends Node {
 	type: 'text',
 }
 
-interface EmptyNode extends Node {
+export interface EmptyNode extends Node {
 	type: 'empty',
 }
 
-type MarcusNodes = SectionNode|KeyNode|ValueNode|KeyValueNode|TextNode|EmptyNode;
+export type ValidNode = SectionNode|KeyNode|ValueNode|KeyValueNode|TextNode|EmptyNode;
 
 export default class Marcus {
 	app: App;
@@ -41,11 +42,113 @@ export default class Marcus {
 	}
 
 	async parseFile( file: TFile) {
-		const {embeds} = this.app.metadataCache.getFileCache(file) || {};
+		// Collected all the content chunks for embeds so we can easily get them later.
+		const embedContent = await this.getEmbedContent(file)
+
 		let doc = await this.app.vault.cachedRead( file );
 
-		// Collected all the content chunks for embeds so we can easily get them later.
-		const embedContent = await Promise.all( (embeds || []).map( async embed => {
+		// If there are embeds to replace, use a regex to do so.
+		if (embedContent.length > 0) {
+			doc = doc.replaceAll(/!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\]/g, (original) => {
+				const embedData = embedContent.find(entry => { return entry.original === original })
+
+				if (typeof embedData === 'undefined') {
+					return original;
+				}
+
+				return embedData.content
+			});
+		}
+
+		// Parse document that has been enhanced with includes.
+		return this.parseDocument(doc);
+	}
+
+
+	/**
+	 * Returns a simplified tree containing data parsed from Markdown.
+	 *
+	 * Embedded notes are inserted into the file before parsing, so their
+	 * content will appear in this tree.
+	 */
+	parseDocument( document: string): Node {
+		// Strip the frontmatter from the string. If frontmatter is being used, it is being used elsewhere.
+		const doc = document.replace(/---\n.*?\n---/s, '');
+		const tree = fromMarkdown(doc)
+
+		// Make sure all heading structures make sense.
+		normalizeHeadings(tree);
+
+		// Being parsing the list of nodes.
+		const nodes: Array<ValidNode> = tree.children.map(child => this.processNode(child));
+		if (nodes.length === 0) {
+			return u('empty');
+		}
+		const stack: Array<SectionNode> = [];
+		for (let i = 0; i < nodes.length; i++) {
+			let tip = stack.pop();
+			const thisNode = nodes[i];
+			if(thisNode.type === 'section') {
+				const section: SectionNode = thisNode;
+				if (tip) {
+					while (tip.depth >= section.depth && stack.length > 0) {
+						const parent = stack.pop() as SectionNode;
+						parent.children.push(tip);
+						tip = parent;
+					}
+
+					// We're a level below, so add as a child and proceed.
+					stack.push(tip);
+					stack.push(section);
+				} else {
+					// This is the top level.
+					stack.push(section);
+				}
+			} else {
+				if (tip) {
+					if (thisNode.type === 'value' || thisNode.type === 'key-value') {
+						tip.children = [...tip.children, ...thisNode.children]
+					} else if (thisNode.type === 'key') {
+						const nextNode = nodes[i+1];
+						if (nextNode && nextNode.type !== 'section') {
+							if (nextNode.type === 'text' || nextNode.type === 'empty') {
+								thisNode.children = [nextNode]
+							} else {
+								thisNode.children = nextNode.children
+							}
+							tip.children = [...tip.children, thisNode]
+							i++;
+						}
+					} else {
+						tip.children = [...tip.children, thisNode]
+					}
+					stack.push(tip);
+				}
+			}
+		}
+		if (stack.length < 1) {
+			// Nothing to return.
+			return u('empty');
+		}
+		while(stack.length > 1) {
+			const oldSection = stack.pop();
+			if (oldSection) {
+				const parent = stack.pop();
+				if (parent) {
+					parent.children.push(oldSection);
+					stack.push(parent);
+				}
+			}
+		}
+		return stack[0];
+	}
+
+	async getEmbedContent( file: TFile ) {
+		const metacache = this.app.metadataCache.getFileCache(file);
+		if (!metacache) {
+			return Promise.resolve([]);
+		}
+		return Promise.all( (metacache.embeds || []).map( async embed => {
 			const {original, link} = embed;
 			const {subpath} = parseLinktext(link);
 			let content = '';
@@ -63,22 +166,6 @@ export default class Marcus {
 			}
 			return {original, content};
 		}) );
-
-		// If there are embeds to replace, use a regex to do so.
-		if (embedContent.length > 0) {
-			doc = doc.replaceAll(/!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\]/g, (original) => {
-				const embedData = embedContent.find(entry => { return entry.original === original })
-
-				if (typeof embedData === 'undefined') {
-					return original;
-				}
-
-				return embedData.content
-			});
-		}
-
-		// Parse document that has been enhanced with includes.
-		return this.parseDocument(doc);
 	}
 
 	async getSectionText( name: string, file: TFile ) {
@@ -119,78 +206,8 @@ export default class Marcus {
 		return section.join('\n');
 	}
 
-	parseDocument( document: string, parseFrontmatter = false ) {
-		let doc = document;
-		if ( ! parseFrontmatter ) {
-			// Strip the frontmatter from the string.
-			doc = doc.replace(/---\n.*?\n---/s, '')
-		}
-		const tree = fromMarkdown(doc);
-		const nodes: Array<MarcusNodes> = tree.children.map(child => this.processNode(child));
-		const stack: Array<SectionNode> = [];
-		for (let i = 0; i < nodes.length; i++) {
-			let tip = stack.pop();
-			const thisNode = nodes[i];
-			if(thisNode.type === 'section') {
-				const section: SectionNode = thisNode;
-				if (tip) {
-					while (tip.depth >= section.depth) {
-						const parent = stack.pop() as SectionNode;
-						parent.children.push(tip);
-						tip = parent;
-					}
 
-					// We're a level below, so add as a child and proceed.
-					stack.push(tip);
-					stack.push(section);
-				} else {
-					// This is the top level.
-					stack.push(section);
-				}
-			} else {
-				// console.log(tip, stack);
-				if (tip) {
-					if (thisNode.type === 'value' || thisNode.type === 'key-value') {
-						tip.children = [...tip.children, ...thisNode.children]
-					} else if (thisNode.type === 'key') {
-						const nextNode = nodes[i+1];
-						if (nextNode && nextNode.type !== 'section') {
-							if (nextNode.type === 'text' || nextNode.type === 'empty') {
-								thisNode.children = [nextNode]
-							} else {
-								thisNode.children = nextNode.children
-							}
-							tip.children = [...tip.children, thisNode]
-							i++;
-						}
-					} else {
-						tip.children = [...tip.children, thisNode]
-					}
-					stack.push(tip);
-				} else {
-					console.error('Expected a parent but could not find one!');
-				}
-			}
-		}
-		if (stack.length < 1) {
-			// Nothing to return.
-			return null;
-		}
-		while(stack.length > 1) {
-			const oldSection = stack.pop();
-			if (oldSection) {
-				const parent = stack.pop();
-				if (parent) {
-					parent.children.push(oldSection);
-					stack.push(parent);
-				}
-			}
-		}
-		console.log(stack);
-		return stack[0];
-	}
-
-	processNode( node: RootContent ): MarcusNodes {
+	processNode( node: RootContent ): ValidNode {
 		switch (node.type) {
 			case 'heading':
 				return this.processHeading(node);
