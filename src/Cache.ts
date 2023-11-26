@@ -1,7 +1,8 @@
 import {TFile} from 'obsidian';
-import localforage from "localforage";
 import Enchiridion from '../main';
 import {Node} from 'unist';
+import { Database } from './vendor/obsidian-database-library';
+import {u} from 'unist-builder';
 
 export type Cached<T> = {
 	timestamp: number,
@@ -10,40 +11,32 @@ export type Cached<T> = {
 
 export default class Cache {
 	plugin: Enchiridion
-	cache: LocalForage;
+	cache: Database<Node>;
 	constructor(plugin: Enchiridion) {
 		this.plugin = plugin;
-		this.cache = localforage.createInstance({
-			name: `enchiridion/cache/${this.plugin.app.appId}`,
-			driver: [localforage.INDEXEDDB],
-			description: 'Cached derived data from Enchridion-tracked files.'
-		})
-	}
-
-	async sync() {
-		Promise.allSettled(this.plugin.files.getTracked().map(async (file: TFile) => {
-			const isSynced = await this.isFileSynced(file);
-			if (isSynced) return;
-			try {
-				await this.updateFile(file);
-			} catch (e) {
-				this.plugin.debug.error('Could not update file', e, file);
-			} finally {
-				this.plugin.debug.info('File updated', file);
-			}}))
-			.then(() => this.plugin.debug.info('Sync complete'))
-			.catch(e => this.plugin.debug.error('Sync failed', e))
+		this.cache = new Database(
+			this.plugin,
+			`enchiridion/cache/${this.plugin.app.appId}`,
+			'Enchiridion Cache',
+			1,
+			'Contains files converted into generic trees.',
+			(): Node => u('empty'),
+			async (file: TFile) => this.plugin.marcus.parseFile(file),
+			(file: TFile) => {
+				const { app: {metadataCache}} = this.plugin;
+				const {frontmatter} = metadataCache.getFileCache(file) || {frontmatter: {enchiridion: false}};
+				return !!frontmatter?.enchiridion;
+			},
+			2
+		)
 	}
 
 	/**
 	 * Is this file up-to-date in the cache?
 	 */
-	async isFileSynced(file: TFile): Promise<boolean> {
-		const cached = await this.cache.getItem<Cached<Node>>(file.path);
-		if (!cached) {
-			return false;
-		}
-		return cached.timestamp === file.stat.mtime
+	isCached(file: TFile)  {
+		return !!this.cache.getItem(file.path);
+
 	}
 
 	/**
@@ -53,11 +46,27 @@ export default class Cache {
 	 * of date, so this method can be trusted to always return "correct" data.
 	 */
 	async getFile(file: TFile): Promise<Node> {
-		const cached = await this.cache.getItem<Cached<Node>>(file.path);
-		if (cached && cached.timestamp === file.stat.mtime) {
-			return cached.content;
+		const cached = this.maybeGetFile(file);
+		if (null !== cached) {
+			return cached;
 		}
-		return this.updateFile(file);
+		const fresh = await this.plugin.marcus.parseFile(file);
+		this.cache.storeKey(file.path, fresh, file.stat.mtime)
+		return fresh;
+	}
+
+	/**
+	 * Get the file if it's in the cache; null otherwise.
+	 *
+	 * The advantage of this method over {@link Cache.getFile()} is that its synchronous
+	 * and doesn't require you to wait.
+	 */
+	maybeGetFile(file: TFile): Node|null {
+		const item = this.cache.getItem(file.path);
+		if (item) {
+			return item.data;
+		}
+		return null;
 	}
 
 	/**
@@ -66,20 +75,17 @@ export default class Cache {
 	 * Does *not* affect the actual note; we're just using the file to look up
 	 * the cached data.
 	 */
-	async deleteFile(file: TFile) {
+	deleteFile(file: TFile) {
 		return this.deleteByPath(file.path);
 	}
 
-	async deleteByPath(path: string) {
-		return this.cache.removeItem(path);
+	deleteByPath(path: string) {
+		return this.cache.deleteKey(path);
 	}
 
 	async updateFile(file: TFile): Promise<Node> {
 		const fresh = await this.plugin.marcus.parseFile(file);
-		const updated = await this.cache.setItem<Cached<Node>>(file.path, {
-			timestamp: file.stat.mtime,
-			content: fresh,
-		})
-		return updated.content;
+		this.cache.storeKey(file.path, fresh, file.stat.mtime)
+		return fresh;
 	}
 }

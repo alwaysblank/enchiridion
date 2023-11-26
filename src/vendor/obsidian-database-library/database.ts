@@ -93,6 +93,7 @@ export class Database<T> extends EventComponent {
      * @param description Description of the database
      * @param defaultValue Constructor for the default value of the database
      * @param extractValue Provide new values for database on file modification
+     * @param testValue Whether this file should be included.
      * @param workers Number of workers to use for parsing files
      * @param loadValue On loading value from indexedDB, run this function on the value (useful for re-adding prototypes)
      */
@@ -104,6 +105,7 @@ export class Database<T> extends EventComponent {
         public description: string,
         private defaultValue: () => T,
         private extractValue: (file: TFile, state?: EditorState) => Promise<T>,
+        private testValue: (file: TFile) => boolean = () => true,
         public workers: number = 2,
         private loadValue: (data: T) => T = (data: T) => data,
     ) {
@@ -142,7 +144,7 @@ export class Database<T> extends EventComponent {
                 // Alternatives: use 'this.editorExtensions.push(EditorView.updateListener.of(async (update) => {'
                 // 	for instant View updates, but this requires the file to be read into the file cache first
                 this.registerEvent(this.plugin.app.vault.on('modify', async (file) => {
-                    if (file instanceof TFile && file.extension === "md") {
+                    if (file instanceof TFile && file.extension === "md" && this.testValue(file)) {
                         const current_editor = this.plugin.app.workspace.activeEditor;
                         const state = (current_editor && current_editor.file?.path === file.path && current_editor.editor) ? current_editor.editor.cm.state : undefined;
                         this.storeKey(file.path, await this.extractValue(file, state), file.stat.mtime);
@@ -150,15 +152,15 @@ export class Database<T> extends EventComponent {
                 }));
 
                 this.registerEvent(this.plugin.app.vault.on('delete', async (file) => {
-                    if (file instanceof TFile && file.extension === "md") this.deleteKey(file.path);
+                    if (file instanceof TFile && file.extension === "md" && this.testValue(file)) this.deleteKey(file.path);
                 }));
 
                 this.registerEvent(this.plugin.app.vault.on('rename', async (file, oldPath) => {
-                    if (file instanceof TFile && file.extension === "md") this.renameKey(oldPath, file.path, file.stat.mtime);
+                    if (file instanceof TFile && file.extension === "md" && this.testValue(file)) this.renameKey(oldPath, file.path, file.stat.mtime);
                 }));
 
                 this.registerEvent(this.plugin.app.vault.on('create', async (file) => {
-                    if (file instanceof TFile && file.extension === "md") this.storeKey(file.path, this.defaultValue(), file.stat.mtime);
+                    if (file instanceof TFile && file.extension === "md" && this.testValue(file)) this.storeKey(file.path, this.defaultValue(), file.stat.mtime);
                 }));
             });
         });
@@ -222,7 +224,7 @@ export class Database<T> extends EventComponent {
      * Synchronize database with vault contents
      */
     async syncDatabase() {
-        const markdownFiles = this.plugin.app.vault.getMarkdownFiles();
+        const markdownFiles = this.plugin.app.vault.getMarkdownFiles().filter(this.testValue);
         this.allKeys().forEach(key => {
             if (!markdownFiles.some(file => file.path === key))
                 this.deleteKey(key);
@@ -230,10 +232,10 @@ export class Database<T> extends EventComponent {
 
         const filesToParse = markdownFiles
             .filter(file => !this.memory.has(file.path) || this.memory.get(file.path)!.mtime < file.stat.mtime);
-        if (filesToParse.length <= 100)
+        // if (filesToParse.length <= 100)
             await this.regularParseFiles(filesToParse);
-        else
-            await this.workerParseFiles(filesToParse);
+        // else
+        //     await this.workerParseFiles(filesToParseilesToParse);
 
         this.plugin.app.saveLocalStorage(this.name + '-version', this.version.toString());
     }
@@ -242,7 +244,8 @@ export class Database<T> extends EventComponent {
      * Rebuild database from scratch by parsing all files in the vault
      */
     async rebuildDatabase() {
-        await this.workerParseFiles(this.plugin.app.vault.getMarkdownFiles());
+        await this.regularParseFiles(this.plugin.app.vault.getMarkdownFiles().filter(this.testValue));
+        // await this.workerParseFiles(this.plugin.app.vault.getMarkdownFiles().filter(this.testValue));
         this.plugin.app.saveLocalStorage(this.name + '-version', this.version.toString());
     }
 

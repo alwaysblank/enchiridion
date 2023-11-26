@@ -36,6 +36,8 @@
 		"@airjp73/dice-notation": "^2.2.2",
 		"@types/mdast": "^4.0.3",
 		"localforage": "^1.10.0",
+		"localforage-getitems": "^1.4.2",
+		"localforage-setitems": "^1.4.0",
 		"mdast-comment-marker": "^3.0.0",
 		"mdast-normalize-headings": "^4.0.0",
 		"mdast-util-from-markdown": "^2.0.0",
