@@ -104,8 +104,6 @@ export default class Enchiridion extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-
-
 }
 
 

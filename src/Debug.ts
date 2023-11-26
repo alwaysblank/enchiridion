@@ -21,6 +21,7 @@ export default class Debug {
 		if (['log', 'info', 'debug'].includes(level) && !this.shouldLog()) {
 			return;
 		}
+		message = `📚 Enchiridion: ${message}`;
 		const args = [message, ...data];
 		switch (level) {
 			case 'log':

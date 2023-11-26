@@ -29,7 +29,7 @@ export default class Cache {
 			} catch (e) {
 				this.plugin.debug.error('Could not update file', e, file);
 			} finally {
-				this.plugin.debug.info('file updated', file);
+				this.plugin.debug.info('File updated', file);
 			}}))
 			.then(() => this.plugin.debug.info('Sync complete'))
 			.catch(e => this.plugin.debug.error('Sync failed', e))
