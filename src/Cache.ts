@@ -1,4 +1,4 @@
-import {App, TFile} from 'obsidian';
+import {TFile} from 'obsidian';
 import localforage from "localforage";
 import Enchiridion from '../main';
 import {Node} from 'unist';
@@ -9,19 +9,49 @@ export type Cached<T> = {
 }
 
 export default class Cache {
-	app: App & {appId: number};
-	plugin: Enchiridion;
+	plugin: Enchiridion
 	cache: LocalForage;
-	constructor(app: App, plugin: Enchiridion) {
-		this.app = app as App & {appId: number};
+	constructor(plugin: Enchiridion) {
 		this.plugin = plugin;
 		this.cache = localforage.createInstance({
-			name: `enchiridion/cache/${this.app.appId}`,
+			name: `enchiridion/cache/${this.plugin.app.appId}`,
 			driver: [localforage.INDEXEDDB],
 			description: 'Cached derived data from Enchridion-tracked files.'
 		})
 	}
 
+	async sync() {
+		Promise.allSettled(this.plugin.files.getTracked().map(async (file: TFile) => {
+			const isSynced = await this.isFileSynced(file);
+			if (isSynced) return;
+			try {
+				await this.updateFile(file);
+			} catch (e) {
+				this.plugin.debug.error('Could not update file', e, file);
+			} finally {
+				this.plugin.debug.info('file updated', file);
+			}}))
+			.then(() => this.plugin.debug.info('Sync complete'))
+			.catch(e => this.plugin.debug.error('Sync failed', e))
+	}
+
+	/**
+	 * Is this file up-to-date in the cache?
+	 */
+	async isFileSynced(file: TFile): Promise<boolean> {
+		const cached = await this.cache.getItem<Cached<Node>>(file.path);
+		if (!cached) {
+			return false;
+		}
+		return cached.timestamp === file.stat.mtime
+	}
+
+	/**
+	 * Return the cached representation of the file.
+	 *
+	 * Note that this will automatically trigger and update if the file is out
+	 * of date, so this method can be trusted to always return "correct" data.
+	 */
 	async getFile(file: TFile): Promise<Node> {
 		const cached = await this.cache.getItem<Cached<Node>>(file.path);
 		if (cached && cached.timestamp === file.stat.mtime) {
@@ -30,6 +60,12 @@ export default class Cache {
 		return this.updateFile(file);
 	}
 
+	/**
+	 * Remove a file from the cache.
+	 *
+	 * Does *not* affect the actual note; we're just using the file to look up
+	 * the cached data.
+	 */
 	async deleteFile(file: TFile) {
 		return this.deleteByPath(file.path);
 	}
