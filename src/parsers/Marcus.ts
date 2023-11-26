@@ -1,16 +1,38 @@
-import {App, getLinkpath, HeadingCache, parseLinktext, resolveSubpath, TFile} from 'obsidian';
+import {App, getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
-import {Heading, Heading as MarkdownHeading, List, ListItem, Paragraph, RootContent} from 'mdast';
+import {Heading as MarkdownHeading, List, ListItem, Paragraph, RootContent} from 'mdast';
 import {Node, Parent} from 'unist';
 import {toString} from 'mdast-util-to-string';
-import {get, set, snakeCase} from 'lodash';
+import {snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
 
-
-type Section = Node & Parent & {
+interface SectionNode extends Node, Parent {
+	type: 'section',
 	depth: number,
 }
+
+interface KeyNode extends Node, Parent {
+	type: 'key',
+}
+
+interface ValueNode extends Node, Parent {
+	type: 'value',
+}
+
+interface KeyValueNode extends Node, Parent {
+	type: 'key-value',
+}
+
+interface TextNode extends Node {
+	type: 'text',
+}
+
+interface EmptyNode extends Node {
+	type: 'empty',
+}
+
+type MarcusNodes = SectionNode|KeyNode|ValueNode|KeyValueNode|TextNode|EmptyNode;
 
 export default class Marcus {
 	app: App;
@@ -18,7 +40,7 @@ export default class Marcus {
 		this.app = app;
 	}
 
-	async parseFile( file: TFile, parseFrontmatter = false ) {
+	async parseFile( file: TFile) {
 		const {embeds} = this.app.metadataCache.getFileCache(file) || {};
 		let doc = await this.app.vault.cachedRead( file );
 
@@ -44,7 +66,7 @@ export default class Marcus {
 
 		// If there are embeds to replace, use a regex to do so.
 		if (embedContent.length > 0) {
-			doc = doc.replaceAll(/(?:!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\])/g, (original) => {
+			doc = doc.replaceAll(/!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\]/g, (original) => {
 				const embedData = embedContent.find(entry => { return entry.original === original })
 
 				if (typeof embedData === 'undefined') {
@@ -104,15 +126,16 @@ export default class Marcus {
 			doc = doc.replace(/---\n.*?\n---/s, '')
 		}
 		const tree = fromMarkdown(doc);
-		const nodes = tree.children.map(child => this.processNode(child));
-		const stack: Array<Section> = [];
+		const nodes: Array<MarcusNodes> = tree.children.map(child => this.processNode(child));
+		const stack: Array<SectionNode> = [];
 		for (let i = 0; i < nodes.length; i++) {
 			let tip = stack.pop();
-			if(nodes[i].type === 'heading') {
-				const section: Section = {...(nodes[i] as Node & {depth: number}), children: []};
+			const thisNode = nodes[i];
+			if(thisNode.type === 'section') {
+				const section: SectionNode = thisNode;
 				if (tip) {
 					while (tip.depth >= section.depth) {
-						const parent = stack.pop() as Section;
+						const parent = stack.pop() as SectionNode;
 						parent.children.push(tip);
 						tip = parent;
 					}
@@ -127,7 +150,22 @@ export default class Marcus {
 			} else {
 				// console.log(tip, stack);
 				if (tip) {
-					tip.children.push(nodes[i]);
+					if (thisNode.type === 'value' || thisNode.type === 'key-value') {
+						tip.children = [...tip.children, ...thisNode.children]
+					} else if (thisNode.type === 'key') {
+						const nextNode = nodes[i+1];
+						if (nextNode && nextNode.type !== 'section') {
+							if (nextNode.type === 'text' || nextNode.type === 'empty') {
+								thisNode.children = [nextNode]
+							} else {
+								thisNode.children = nextNode.children
+							}
+							tip.children = [...tip.children, thisNode]
+							i++;
+						}
+					} else {
+						tip.children = [...tip.children, thisNode]
+					}
 					stack.push(tip);
 				} else {
 					console.error('Expected a parent but could not find one!');
@@ -148,68 +186,18 @@ export default class Marcus {
 				}
 			}
 		}
+		console.log(stack);
 		return stack[0];
-
-		// console.log(this.extractAllSections(u('root', tree.children.map(child => this.processNode(child)))));
-		// console.log(this.extractAllSections(tree))
-		// const indexOf = tree.children.findIndex(node => {
-		// 	return node.type === 'heading' && toString(node) === 'Actions';
-		// })
-		// if ( indexOf >= 0) {
-		// 	const sliced = tree.children.slice(indexOf);
-		// 	const section = [];
-		// 	let i = 1;
-		// 	while (sliced[i] && (sliced[i].type !== 'heading' || sliced[i].depth > tree.children[indexOf].depth)) {
-		// 		section.push(sliced[i])
-		// 		i++
-		// 	}
-		// }
 	}
 
-
-	extractAllSections( tree ) {
-		const nodes = tree.children;
-		const sections = new Map<RootContent, Array<RootContent>>()
-		let openSections: Array<Heading> = [];
-		for (let i = 0; i < nodes.length; i++) {
-			if(nodes[i].type === 'heading') {
-				// Remove 'closed' headings.
-				openSections = openSections.filter(heading => (nodes[i] as Heading).depth > heading.depth)
-				openSections.push(nodes[i] as Heading);
-				continue;
-			}
-			openSections.map(heading => {
-				let sectionContent = sections.get(heading);
-				if (!sectionContent) {
-					sectionContent = [];
-				}
-				sectionContent.push(nodes[i])
-				sections.set(heading, sectionContent);
-			})
-		}
-		return sections;
-	}
-
-	getArrayLast<T>( arr: Array<T> ): T|undefined {
-		return arr[arr.length -1] || undefined;
-	}
-
-	mergeObjectArray( arr: Array<{[index: string]: any}|null> ): {[index:string]: any} {
-		return arr.reduce((obj: object, item: {[index:string]: any}|null ): object => {
-			if (null === item) {
-				return obj;
-			}
-			return {...obj, ...item};
-		}, {})
-	}
-
-	processNode( node: RootContent ): Node {
+	processNode( node: RootContent ): MarcusNodes {
 		switch (node.type) {
+			case 'heading':
+				return this.processHeading(node);
 			case 'list':
 				return this.processList(node)
-			case 'heading':
-				// handle limited special case
-				return this.processHeading(node);
+			case 'paragraph':
+				return this.processParagraph(node);
 			// case 'table':
 				// TODO
 			default:
@@ -217,15 +205,29 @@ export default class Marcus {
 		}
 	}
 
-	processHeading( heading: MarkdownHeading ) {
-		return u('heading', {depth: heading.depth}, toString(heading));
+	processHeading( heading: MarkdownHeading ): SectionNode {
+		return u('section', {depth: heading.depth,  children: []}, toString(heading));
 	}
 
-	processList( list: List ): Node {
+	processParagraph( paragraph: Paragraph ): KeyNode|KeyValueNode|TextNode {
+		const {children} = paragraph;
+		if (children[0].type === 'strong') {
+			if (children.length === 1) {
+				return u('key', {children: []}, toString(paragraph))
+			}
+			const key = toString(children.shift());
+			const value = children.map(child => toMarkdown(child)).join('');
+			return u('key-value', [u('pair',{key, value})]);
+		}
+
+		return u('text', toMarkdown(paragraph))
+	}
+
+	processList( list: List ): ValueNode|KeyValueNode|EmptyNode {
 		const type = this.getListType(list);
 		switch (type) {
 			case 'array':
-				return u('array', list.children.map(node => u('row', toString(node))))
+				return u('value', list.children.map(node => u('row', toString(node))))
 			case 'key-value':
 				return u(
 					'key-value', list.children.map(node => {
@@ -237,7 +239,7 @@ export default class Marcus {
 		return u('empty');
 	}
 
-	getListItemKeyValue( listItem: ListItem ): {key: string, value: string|Node} {
+	getListItemKeyValue( listItem: ListItem ): {key: string, value: string|ValueNode|KeyValueNode|EmptyNode} {
 		const {children} = listItem;
 		let key, value;
 		if (children.length > 1) {
