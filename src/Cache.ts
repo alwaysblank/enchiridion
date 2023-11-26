@@ -25,10 +25,17 @@ export default class Cache {
 	async getFile(file: TFile): Promise<Node> {
 		const cached = await this.cache.getItem<Cached<Node>>(file.path);
 		if (cached && cached.timestamp === file.stat.mtime) {
-			console.log("cache hit!")
 			return cached.content;
 		}
 		return this.updateFile(file);
+	}
+
+	async deleteFile(file: TFile) {
+		return this.deleteByPath(file.path);
+	}
+
+	async deleteByPath(path: string) {
+		return this.cache.removeItem(path);
 	}
 
 	async updateFile(file: TFile): Promise<Node> {

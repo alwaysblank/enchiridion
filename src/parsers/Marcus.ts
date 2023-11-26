@@ -42,10 +42,14 @@ export default class Marcus {
 	}
 
 	async parseFile( file: TFile) {
+		const {vault, metadataCache} = this.app;
 		// Collected all the content chunks for embeds so we can easily get them later.
 		const embedContent = await this.getEmbedContent(file)
 
-		let doc = await this.app.vault.cachedRead( file );
+		let doc = await vault.cachedRead( file );
+
+		// Strip the frontmatter from the string. If frontmatter is being used, it is being used elsewhere.
+		doc = doc.replace(/---\n.*?\n---/s, '');
 
 		// If there are embeds to replace, use a regex to do so.
 		if (embedContent.length > 0) {
@@ -60,6 +64,17 @@ export default class Marcus {
 			});
 		}
 
+		// If this file doesn't have a top-level heading, use the filename.
+		const fileCache = metadataCache.getFileCache(file);
+		if (null !== fileCache) {
+			const {headings = []} = fileCache;
+			const hasTopLevel = headings.some(heading => heading.level === 1);
+			if (!hasTopLevel) {
+				const title = file.basename;
+				doc = `# ${title}\n${doc}`;
+			}
+		}
+
 		// Parse document that has been enhanced with includes.
 		return this.parseDocument(doc);
 	}
@@ -70,11 +85,12 @@ export default class Marcus {
 	 *
 	 * Embedded notes are inserted into the file before parsing, so their
 	 * content will appear in this tree.
+	 *
+	 * This expects *only* Markdown; Strip frontmatter before passing to this
+	 * method.
 	 */
 	parseDocument( document: string): Node {
-		// Strip the frontmatter from the string. If frontmatter is being used, it is being used elsewhere.
-		const doc = document.replace(/---\n.*?\n---/s, '');
-		const tree = fromMarkdown(doc)
+		const tree = fromMarkdown(document)
 
 		// Make sure all heading structures make sense.
 		normalizeHeadings(tree);
@@ -205,7 +221,6 @@ export default class Marcus {
 		const section = byLine.slice(startLine, endLine);
 		return section.join('\n');
 	}
-
 
 	processNode( node: RootContent ): ValidNode {
 		switch (node.type) {

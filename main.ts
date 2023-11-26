@@ -1,20 +1,25 @@
-import {App, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {App, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile} from 'obsidian';
 import Marcus from './src/parsers/Marcus';
 import Cache from './src/Cache'
-// Remember to rename these classes and interfaces!
+import Debug from './src/Debug';
 
 interface EnchiridionSettings {
-	mySetting: string;
+	debug: {
+		log: boolean,
+	}
 }
 
 const DEFAULT_SETTINGS: EnchiridionSettings = {
-	mySetting: 'default'
+	debug: {
+		log: false,
+	}
 }
 
 export default class Enchiridion extends Plugin {
-	settings: EnchiridionSettings
+	settings: EnchiridionSettings = DEFAULT_SETTINGS;
 	marcus: Marcus = new Marcus(this.app);
-	cache: Cache = new Cache(this.app, this)
+	cache: Cache = new Cache(this.app, this);
+	debug: Debug = new Debug(this.app, this);
 
 	/**
 	 * Runs whenever the plugin starts being used.
@@ -28,10 +33,43 @@ export default class Enchiridion extends Plugin {
 		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
 			const active = this.app.workspace.getActiveFile();
 			if (active) {
-				// const parsed = await this.marcus.parseFile(active);
-				console.log(await this.cache.getFile(active));
+				const parsed = await this.marcus.parseFile(active);
+				this.debug.info('Processed file:', parsed);
 			}
 		} )
+
+		this.hooks();
+	}
+
+	/**
+	 * Attach any necessary hooks.
+	 */
+	hooks() {
+		this.registerEvent(this.app.vault.on('create', (file: TAbstractFile) => {
+			if (file instanceof TFile) {
+				this.cache.updateFile(file)
+					.then(() => this.debug.info(`${file.path} add to Enchiridion database.`))
+					.catch((reason) => this.debug.error(reason))
+			}
+		}));
+		this.registerEvent(this.app.vault.on('modify', (file: TAbstractFile) => {
+			if (file instanceof TFile) {
+				this.cache.updateFile(file)
+					.then(() => this.debug.info(`${file.path} updated in Enchiridion database.`))
+					.catch((reason) => this.debug.error(reason))
+			}
+		}));
+		this.registerEvent(this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
+			if (file instanceof TFile) {
+				this.cache.deleteByPath(oldPath)
+					.then(() => {
+						this.debug.info(`${oldPath} removed from Enchiridion database.`)
+						return this.cache.updateFile(file)
+					})
+					.then(() => this.debug.info(`${file.path} updated in Enchiridion database.`))
+					.catch((reason) => this.debug.error(reason))
+			}
+		}));
 	}
 
 	/**
@@ -48,6 +86,8 @@ export default class Enchiridion extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+
 }
 
 
@@ -65,14 +105,14 @@ class EnchiridionSettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName('Show Debug Logs')
+			.setDesc('Output debug logging to console (otherwise logs are suppressed).')
+			.addToggle( toggle => toggle
+				.setValue(this.plugin.settings.debug.log)
+				.onChange(value => {
+					this.plugin.settings.debug.log = value
+					this.plugin.saveSettings();
+				})
+			);
 	}
 }
