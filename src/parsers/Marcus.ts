@@ -1,7 +1,7 @@
 import {getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
 import {Heading as MarkdownHeading, List, ListItem, Paragraph, RootContent} from 'mdast';
-import {Node, Parent} from 'unist';
+import {Parent, Literal, Node} from 'unist';
 import {toString} from 'mdast-util-to-string';
 import {snakeCase} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
@@ -9,32 +9,78 @@ import {u} from 'unist-builder'
 import {normalizeHeadings} from 'mdast-normalize-headings'
 import Enchiridion from '../../main';
 
-export interface SectionNode extends Node, Parent {
+interface Keyed {
+	key: string,
+}
+
+export interface SectionNode extends Keyed, Parent {
 	type: 'section',
 	depth: number,
 }
 
-export interface KeyNode extends Node, Parent {
+/**
+ * This is essentially a {@link KeyedContainerNode} but without any defined children.
+ * Generally this means that children will be added to it later.
+ * (Is there then a distinction between this and a key-value node...?)
+ */
+export interface KeyNode extends Keyed {
 	type: 'key',
 }
 
-export interface ValueNode extends Node, Parent {
-	type: 'value',
+export interface CollectionNode<Child extends Node> extends Parent {
+	children: Array<Child>
 }
 
-export interface KeyValueNode extends Node, Parent {
-	type: 'key-value',
+export interface KeyedCollectionNode<Child extends Node> extends CollectionNode<Child>, Keyed {}
+
+export interface RowCollectionNode extends CollectionNode<RowNode> {
+	type: 'rows',
 }
 
-export interface TextNode extends Node {
+export interface KeyedRowCollectionNode extends KeyedCollectionNode<RowNode> {
+	type: 'keyed-rows',
+}
+
+export interface PairCollectionNode extends CollectionNode<PairNode> {
+	type: 'pairs',
+}
+
+export interface KeyedPairCollectionNode extends KeyedCollectionNode<PairNode> {
+	type: 'keyed-pairs',
+}
+
+export interface KeyedContainerNode extends KeyedCollectionNode<TreeNode> {
+	type: 'keyed-container',
+}
+
+export interface ContainerNode extends CollectionNode<TreeNode> {
+	type: 'container',
+}
+
+export interface PairNode extends Literal, Keyed {
+	type: 'pair';
+}
+
+export interface RowNode extends Literal {
+	type: 'row';
+}
+
+export interface TextNode extends Literal {
 	type: 'text',
 }
 
-export interface EmptyNode extends Node {
+export interface EmptyNode extends Literal {
 	type: 'empty',
+	value: '',
 }
 
-export type ValidNode = SectionNode|KeyNode|ValueNode|KeyValueNode|TextNode|EmptyNode;
+export type KeyedNode = PairNode | KeyedContainerNode | KeyedPairCollectionNode | KeyedRowCollectionNode | KeyNode | SectionNode;
+
+export type CollectedNode = PairCollectionNode | RowCollectionNode | ContainerNode;
+
+export type ValueNode = EmptyNode | TextNode | RowNode;
+
+export type TreeNode = EmptyNode | ValueNode | KeyedNode | CollectedNode | CollectionNode<TreeNode> | KeyedCollectionNode<TreeNode>;
 
 export default class Marcus {
 	plugin: Enchiridion;
@@ -91,22 +137,22 @@ export default class Marcus {
 	 * This expects *only* Markdown; Strip frontmatter before passing to this
 	 * method.
 	 */
-	parseDocument( document: string): Node {
+	parseDocument( document: string): TreeNode {
 		const tree = fromMarkdown(document)
 
 		// Make sure all heading structures make sense.
 		normalizeHeadings(tree);
 
 		// Being parsing the list of nodes.
-		const nodes: Array<ValidNode> = tree.children.map(child => this.processNode(child));
+		const nodes: Array<TreeNode> = tree.children.map(child => this.processNode(child));
 		if (nodes.length === 0) {
-			return u('empty');
+			return this.makeEmptyNode();
 		}
 		const stack: Array<SectionNode> = [];
 		for (let i = 0; i < nodes.length; i++) {
 			let tip = stack.pop();
 			const thisNode = nodes[i];
-			if(thisNode.type === 'section') {
+			if('depth' in thisNode) {
 				const section: SectionNode = thisNode;
 				if (tip) {
 					while (tip.depth >= section.depth && stack.length > 0) {
@@ -124,19 +170,35 @@ export default class Marcus {
 				}
 			} else {
 				if (tip) {
-					if (thisNode.type === 'value' || thisNode.type === 'key-value') {
-						tip.children = [...tip.children, ...thisNode.children]
-					} else if (thisNode.type === 'key') {
-						const nextNode = nodes[i+1];
-						if (nextNode && nextNode.type !== 'section') {
-							if (nextNode.type === 'text' || nextNode.type === 'empty') {
-								thisNode.children = [nextNode]
-							} else {
-								thisNode.children = nextNode.children
-							}
-							tip.children = [...tip.children, thisNode]
-							i++;
+					if ('children' in thisNode && 'key' in thisNode) {
+						tip.children = [...tip.children, thisNode];
+					} else if ('children' in thisNode) {
+						tip.children = [...tip.children, ...thisNode.children];
+					} else if ('key' in thisNode) {
+						switch(thisNode.type) {
+							case 'pair':
+								tip.children
 						}
+						const consumeChildren = (key: string) => {
+							const nextNode = nodes[i+1];
+							const collection: KeyedContainerNode = u('keyed-container', {key}, []);
+							if (nextNode.type === 'section' && 'depth' in nextNode) {
+								collection.children = [this.makeEmptyNode()];
+								return collection;
+							}
+							if (nextNode) {
+								i++; // Advance, since we're consuming the next node.
+								if ('children' in nextNode && 'key' in nextNode) {
+									collection.children = [...collection.children, nextNode];
+								} else if ('children' in nextNode) {
+									collection.children = [...collection.children, ...nextNode.children]
+								} else if ('key' in nextNode) {
+									collection.children = [...collection.children, consumeChildren(nextNode.key)]
+								}
+							}
+							return collection;
+						}
+						tip.children = [...tip.children, consumeChildren(thisNode.key)];
 					} else {
 						tip.children = [...tip.children, thisNode]
 					}
@@ -146,7 +208,7 @@ export default class Marcus {
 		}
 		if (stack.length < 1) {
 			// Nothing to return.
-			return u('empty');
+			return this.makeEmptyNode();
 		}
 		while(stack.length > 1) {
 			const oldSection = stack.pop();
@@ -226,7 +288,7 @@ export default class Marcus {
 		return section.join('\n');
 	}
 
-	processNode( node: RootContent ): ValidNode {
+	processNode( node: RootContent ): TreeNode|EmptyNode {
 		switch (node.type) {
 			case 'heading':
 				return this.processHeading(node);
@@ -242,61 +304,114 @@ export default class Marcus {
 	}
 
 	processHeading( heading: MarkdownHeading ): SectionNode {
-		return u('section', {depth: heading.depth,  children: []}, toString(heading));
+		return u('section', {depth: heading.depth,  key: toString(heading)}, []);
 	}
 
-	processParagraph( paragraph: Paragraph ): KeyNode|KeyValueNode|TextNode {
+	processParagraph( paragraph: Paragraph ): KeyNode|PairNode|TextNode {
 		const {children} = paragraph;
 		if (children[0].type === 'strong') {
 			if (children.length === 1) {
-				return u('key', {children: []}, toString(paragraph))
+				return u('key', {key: toString(paragraph)})
 			}
-			const key = toString(children.shift());
-			const value = children.map(child => toMarkdown(child)).join('');
-			return u('key-value', [u('pair',{key, value})]);
+			const key = this.cleanKey(toString(children.shift()));
+			const value = this.cleanValue(children.map(child => toMarkdown(child)).join(''));
+			return u('pair', {key}, value);
 		}
 
 		return u('text', toMarkdown(paragraph))
 	}
 
-	processList( list: List ): ValueNode|KeyValueNode|EmptyNode {
+	processList( list: List ): CollectionNode<TreeNode>|EmptyNode {
 		const type = this.getListType(list);
 		switch (type) {
 			case 'array':
-				return u('value', list.children.map(node => u('row', toString(node))))
-			case 'key-value':
 				return u(
-					'key-value', list.children.map(node => {
-						const {key, value} = this.getListItemKeyValue(node) || {};
-						return u('pair', {key, value})
-					})
-				)
+					'list',
+					list.children
+						.map(this.getListItemRow, this)
+						.filter((child): child is RowNode => 'row' === child.type)
+				);
+			case 'nested':
+				return u(
+					'container', {},
+					list.children
+						.map(this.getListItemNested, this)
+						.filter((child): child is KeyedCollectionNode<TreeNode> => 'empty' !== child.type)
+				);
+			case 'pairs':
+				return u(
+					'pairs', {},
+					list.children
+						.map(this.getListItemPair, this)
+						.filter((child): child is PairNode => 'pair' === child.type)
+				);
+			case 'mixed':
+				return u(
+					'container', {},
+					list.children
+						.map(this.getListItem, this)
+						.filter((child): child is PairNode|RowNode|KeyedCollectionNode<TreeNode> => 'empty' !== child.type)
+				);
 		}
-		return u('empty');
+		return this.makeEmptyNode();
 	}
 
-	getListItemKeyValue( listItem: ListItem ): {key: string, value: string|ValueNode|KeyValueNode|EmptyNode} {
-		const {children} = listItem;
-		let key, value;
-		if (children.length > 1) {
-			// this is nested.
-			key = this.cleanKey(toString(children[0]));
-			value = this.processList(children[1] as List);
-		} else {
-			// this is not nested.
-			const text = (children[0] as Paragraph).children.map( child => toString( child ) );
-			key = text.shift() || '';
-			key = this.cleanKey(key);
-			value = this.cleanValue(text.join(' '));
+	getListItem(listItem: ListItem): PairNode|RowNode|KeyedCollectionNode<TreeNode>|EmptyNode {
+		switch (this.getListItemType(listItem)) {
+			case 'pair':
+				return this.getListItemPair(listItem);
+			case 'nested':
+				return this.getListItemNested(listItem);
+			case 'row':
+				return this.getListItemRow(listItem);
+			default:
+				return this.makeEmptyNode();
 		}
-		return {key, value};
+	}
+
+	getListItemPair(listItem: ListItem): PairNode|EmptyNode {
+		const stringified = (listItem.children[0] as Paragraph).children
+			.map((child) => toString(child));
+		let key = stringified.shift();
+		if (!key || stringified.length === 0) {
+			return this.makeEmptyNode();
+		}
+		let value = stringified.join('');
+		key = this.cleanKey(key);
+		value = this.cleanValue(value);
+		return u('pair', {key}, value);
+	}
+
+	getListItemRow(listItem: ListItem): RowNode|EmptyNode {
+		const value = toString(listItem);
+		if (value.length === 0) {
+			return this.makeEmptyNode();
+		}
+		return u('row', value);
+	}
+
+	getListItemNested(listItem: ListItem): KeyedCollectionNode<TreeNode>|EmptyNode {
+		const {children} = listItem;
+		if (children.length === 2 && children[0].type === 'paragraph' && children[1].type === 'list') {
+			const key = toString(children[0]);
+			const value = this.processList(children[1]);
+			switch (value.type) {
+				case 'pairs':
+					return u('keyed-pairs', {key}, value.children);
+				case 'list':
+					return u('keyed-rows', {key}, value.children);
+				case 'container':
+					return u('keyed-container', {key}, value.children )
+			}
+		}
+		return this.makeEmptyNode();
 	}
 
 	/**
 	 * Determine the type of list we're dealing with.
 	 * @param list
 	 */
-	getListType( list: List ): 'array' | 'key-value' | 'nested' | 'empty' | 'mixed' | 'invalid' {
+	getListType( list: List ): 'array' | 'pairs' | 'nested' | 'empty' | 'mixed' | 'invalid' {
 		if ( list.children.length === 0 ) {
 			return 'empty';
 		}
@@ -306,25 +421,31 @@ export default class Marcus {
 		if ( unique.length === 1 ) {
 			// If all items are the same, we can return early because we know the type.
 			// Note that this in the only context in which we can return 'array'.
-			if ( unique[0] === 'unidentified' ) {
-				return 'invalid';
+			switch (unique[0]) {
+				case 'nested':
+					return 'nested';
+				case 'row':
+					return 'array';
+				case 'pair':
+					return 'pairs';
+				default:
+					return 'invalid';
 			}
-			return unique[0];
 		}
 
-		if ( unique.length > 1 && unique.includes('array') ) {
+		if ( unique.length > 1 && unique.includes('row') ) {
 			// Arrays cannot be part of mixed lists.
 			return 'invalid';
 		}
 
-		return 'key-value';
+		return 'pairs';
 	}
 
 	/**
 	 * Determine the type of list item we're dealing with.
 	 * @param listItem
 	 */
-	getListItemType( listItem: ListItem ): 'nested' | 'key-value' | 'array' | 'unidentified' {
+	getListItemType( listItem: ListItem ): 'nested' | 'pair' | 'row' | 'unidentified' {
 		const { children } = listItem;
 		if ( children.length === 2 && children[0].type === 'paragraph' && children[1].type === 'list' ) {
 			return 'nested';
@@ -333,9 +454,9 @@ export default class Marcus {
 		if ( children.length === 1 && childValue.type === 'paragraph' ) {
 			// This is either an array or a key-value pair.
 			if (childValue.children.length > 1 && childValue.children[0].type === 'strong') {
-				return 'key-value';
+				return 'pair';
 			} else {
-				return 'array';
+				return 'row';
 			}
 		}
 		return 'unidentified';
@@ -352,4 +473,14 @@ export default class Marcus {
 	normalizeKey( key: string ): string {
 		return snakeCase(key);
 	}
+
+	makeEmptyNode(): EmptyNode {
+		return <EmptyNode>u('empty', '');
+	}
+
+	// findByKey(key: string, tree: ValidNode): ValidNode {
+	// 	tree.value
+	// 	if ('children' in tree) {
+	// 	}
+	// }
 }
