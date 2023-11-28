@@ -3,7 +3,7 @@ import {fromMarkdown} from 'mdast-util-from-markdown'
 import {Heading, List, ListItem, Paragraph, RootContent} from 'mdast';
 import {Parent, Literal} from 'unist';
 import {toString} from 'mdast-util-to-string';
-import {snakeCase, difference} from 'lodash';
+import {snakeCase, difference, isEqual} from 'lodash';
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
 import {normalizeHeadings} from 'mdast-normalize-headings'
@@ -438,29 +438,50 @@ export default class Marcus {
 	}
 
 	/**
-	 * Retrieves a key from the tree, and attempts to resolve multiple instances.
+	 * Attempts to merge results of {@link Marcus.findByKey()} or {@link Marcus.findByPath()}.
 	 *
-	 * Note that the deduplication is relatively naive—it just compares
-	 * stringified objects—but it should handle relatively naive situations.
+	 * This combines all item results in a single set of items, de-duplicating
+	 * items that appear to be the same. It determines
 	 *
-	 * @param {string} key The key to find. Not case-sensitive.
-	 * @param {BasicTypes} root The tree to search.
+	 * @param results
 	 */
-	resolveKey(key: string, root: BasicTypes | Root) {
-		const results = this.findByKey(key, root);
-		const compiled = new Map<string,BasicTypes>();
+	mergeResults(results: Array<BasicTypes>) {
+		const compiled: Array<BasicTypes> = [];
 		results.forEach((node) => {
 			if('value' in node) {
-				const key = JSON.stringify(node);
-				if (!compiled.has(key)) compiled.set(key, node);
+				compiled.push(node)
 			} else if ('children' in node) {
 				node.children.forEach(node => {
-					const key = JSON.stringify(node);
-					if (!compiled.has(key)) compiled.set(key, node);
+					compiled.push(node);
 				});
 			}
 		});
-		return Array.from(compiled.values());
+		return this.deduplicateNodeList(compiled);
+	}
+
+	/**
+	 * Remove duplicates from a list.
+	 *
+	 * Attempts to preserve order, prioritizing the first occurrence of a
+	 * value in the list.
+	 *
+	 * Note that this is probably not especially fast, so you shouldn't use
+	 * it for parsing large lists of complex objects.
+	 *
+	 * @param list
+	 */
+	deduplicateNodeList(list: Array<BasicTypes>): Array<BasicTypes> {
+		let stack: Array<BasicTypes> = list;
+		const deduped: Array<BasicTypes> = [];
+
+		while (stack.length > 0) {
+			const current = stack.shift();
+			if (typeof current === 'undefined') continue;
+			stack = stack.filter(item => !isEqual(current, item))
+			deduped.push(current);
+		}
+
+		return deduped;
 	}
 
 	findByKey(key: string, root: BasicTypes | Root) {
@@ -479,5 +500,38 @@ export default class Marcus {
 			})
 		}
 		return results;
+	}
+
+	/**
+	 * Retrieves results from the specified path.
+	 *
+	 * This allows us to limit searching to particular areas, but bear in mind
+	 * the fill path must match.
+	 *
+	 * @param {Array<string>} path A path of key names.
+	 * @param {BasicTypes | Root} root The tree to search.
+	 */
+	findByPath(path: Array<string>, root: BasicTypes | Root): Array<BasicTypes> {
+		if (path.length === 1) {
+			return this.findByKey(path[0], root);
+		}
+		let result: Array<BasicTypes> = [];
+		const key = path.shift();
+		if (!key) return result;
+		if('children' in root) {
+			root.children.forEach(node => {
+				if('key' in node && this.keysMatch(node.key, key)) {
+					if(path.length === 0) {
+						// This is the final segment, so this is our match.
+						return result.push(node);
+					}
+					if ('children' in node) {
+						const innerResults = this.findByPath(path, node);
+						if(innerResults.length > 0) result = [...result,...innerResults];
+					}
+				}
+			})
+		}
+		return result;
 	}
 }
