@@ -5,9 +5,8 @@ import { extendPrototype as extendPrototypeGet } from 'localforage-getitems';
 extendPrototypeGet(localforage);
 
 import { type EditorState } from "@codemirror/state";
-import { debounce, type EventRef, Events, type Plugin, TFile } from 'obsidian';
-// @ts-expect-error (if somebody knows how to get rid of this TS error, please do share, allowSyntheticDefaultImports does not work)
-import Indexer from './indexer.worker';
+import {debounce, Editor, type EventRef, Events, TFile} from 'obsidian';
+import Enchiridion from '../../../main.js';
 
 export type DatabaseItem<T> = { data: T, mtime: number };
 export type DatabaseEntry<T> = [string, DatabaseItem<T>];
@@ -50,8 +49,6 @@ export class Database<T> extends EventComponent {
      * IndexedDB instance for persisting data
      */
     persist: typeof localforage;
-
-    private testtime: number = 0;
 
     /**
      * List of keys that have been deleted from the in-memory cache, but not yet from indexedDB
@@ -98,7 +95,7 @@ export class Database<T> extends EventComponent {
      * @param loadValue On loading value from indexedDB, run this function on the value (useful for re-adding prototypes)
      */
     constructor(
-        public plugin: Plugin,
+        public plugin: Enchiridion,
         public name: string,
         public title: string,
         public version: number,
@@ -127,9 +124,6 @@ export class Database<T> extends EventComponent {
 
                 this.trigger('database-update', this.allEntries());
 
-                const operation_label = oldVersion !== null && oldVersion < version ? "migrating" :
-                    this.isEmpty() ? "initializing" : "syncing";
-
                 if (oldVersion !== null && oldVersion < version && !this.isEmpty()) {
                     await this.clearDatabase();
                     await this.rebuildDatabase();
@@ -146,7 +140,7 @@ export class Database<T> extends EventComponent {
                 this.registerEvent(this.plugin.app.vault.on('modify', async (file) => {
                     if (file instanceof TFile && file.extension === "md" && this.testValue(file)) {
                         const current_editor = this.plugin.app.workspace.activeEditor;
-                        const state = (current_editor && current_editor.file?.path === file.path && current_editor.editor) ? current_editor.editor.cm.state : undefined;
+                        const state = (current_editor && current_editor.file?.path === file.path && current_editor.editor) ? (current_editor.editor as Editor & {cm: {state: any}}).cm.state : undefined;
                         this.storeKey(file.path, await this.extractValue(file, state), file.stat.mtime);
                     }
                 }));
@@ -194,33 +188,6 @@ export class Database<T> extends EventComponent {
     }
 
     /**
-     * Extract values from files and store them in the database using workers
-     * @remark Prefer usage of this function over regularParseFiles
-     * @param files Files to extract values from and store/update in the database
-     */
-    async workerParseFiles(files: TFile[]) {
-        const read_files = await Promise.all(files.map(async file => await this.plugin.app.vault.cachedRead(file)));
-        const chunk_size = Math.ceil(files.length / this.workers);
-
-        for (let i = 0; i < this.workers; i++) {
-            const worker: Worker = new Indexer(null, { name: this.title + " indexer " + (i + 1)});
-            const files_chunk = files.slice(i * chunk_size, (i + 1) * chunk_size);
-            const read_files_chunk = read_files.slice(i * chunk_size, (i + 1) * chunk_size);
-            worker.onmessage = (event: {data: T[]}) => {
-                for (let i = 0; i < files_chunk.length; i++) {
-                    const file = files_chunk[i];
-                    const extracted_value = this.loadValue(event.data[i]);
-                    this.storeKey(file.path, extracted_value, file.stat.mtime, true);
-                }
-                worker.terminate();
-            }
-            worker.postMessage(read_files_chunk);
-        }
-
-        this.plugin.app.saveLocalStorage(this.name + '-version', this.version.toString());
-    }
-
-    /**
      * Synchronize database with vault contents
      */
     async syncDatabase() {
@@ -232,10 +199,7 @@ export class Database<T> extends EventComponent {
 
         const filesToParse = markdownFiles
             .filter(file => !this.memory.has(file.path) || this.memory.get(file.path)!.mtime < file.stat.mtime);
-        // if (filesToParse.length <= 100)
-            await this.regularParseFiles(filesToParse);
-        // else
-        //     await this.workerParseFiles(filesToParseilesToParse);
+        await this.regularParseFiles(filesToParse);
 
         this.plugin.app.saveLocalStorage(this.name + '-version', this.version.toString());
     }

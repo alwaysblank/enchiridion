@@ -1,8 +1,9 @@
 import {TFile} from 'obsidian';
-import Enchiridion from '../main';
+import Enchiridion from '../main.js';
 import {Node} from 'unist';
-import { Database } from './vendor/obsidian-database-library';
+import {Database} from './vendor/obsidian-database-library/index.js'
 import {u} from 'unist-builder';
+import {parseFile} from './parsers/markdown.js';
 
 export type Cached<T> = {
 	timestamp: number,
@@ -21,7 +22,7 @@ export default class Cache {
 			1,
 			'Contains files converted into generic trees.',
 			(): Node => u('empty'),
-			async (file: TFile) => this.plugin.marcus.parseFile(file),
+			async (file: TFile) => parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache),
 			(file: TFile) => {
 				const { app: {metadataCache}} = this.plugin;
 				const {frontmatter} = metadataCache.getFileCache(file) || {frontmatter: {enchiridion: false}};

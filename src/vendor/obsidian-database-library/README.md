@@ -1,3 +1,5 @@
+https://github.com/Fevol/obsidian-database-library
+
 A tiny library for creating persistent databases that stay in sync with the Obsidian vault, specifically written for use within [Obsidian](https://obsidian.md/) plugins.
 
 
@@ -35,18 +37,18 @@ const database: Database<YOUR_TYPE> = new Database(
     "Pretty Database Name",
     1,  /* Database version number */
     "A description of the database",
-	
+
     // Default initialization of a value within the database
-    () => [], 
-	
+    () => [],
+
     // Extract the values you need from the file
     async (file: TFile) => {
         return YOUR_TYPE;
     },
-	
+
     // Amount of worker threads to use when indexing the vault
     2,
-	
+
     // Optional: alter data that is loaded from the database
     (data: YOUR_TYPE) => {
         return data;
