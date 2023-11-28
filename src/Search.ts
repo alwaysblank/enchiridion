@@ -22,6 +22,7 @@ export default class Search extends FuzzySuggestModal<TFile>{
 	renderSuggestion(match: FuzzyMatch<TFile>, el: HTMLElement) {
 		const cache = this.plugin.app.metadataCache.getFileCache(match.item) || {};
 		el.createEl('div', {text: match.item.basename})
+		// @ts-ignore
 		el.createEl('small', {text: cache?.frontmatter.type})
 	}
 }

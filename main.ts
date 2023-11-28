@@ -1,9 +1,9 @@
 import {App, Plugin, PluginSettingTab, Setting} from 'obsidian';
-import Marcus from './src/parsers/Marcus';
-import Cache from './src/Cache'
-import Debug from './src/Debug';
-import Files from './src/Files';
-import Search from './src/Search';
+import Cache from './src/Cache.js'
+import Debug from './src/Debug.js';
+import Files from './src/Files.js';
+import Search from './src/Search.js';
+import {parseFile} from './src/parsers/markdown.js';
 
 interface EnchiridionSettings {
 	debug: {
@@ -13,6 +13,8 @@ interface EnchiridionSettings {
 
 export type EnhancedApp = App & {
 	appId: number, // This prop exists, but is not officially documented, so we must add it.
+	loadLocalStorage: (key: string) => any, // Undocumented core function.
+	saveLocalStorage: (key: string, value: any) => void, // Undocumented core function.
 }
 
 const DEFAULT_SETTINGS: EnchiridionSettings = {
@@ -24,7 +26,6 @@ const DEFAULT_SETTINGS: EnchiridionSettings = {
 export default class Enchiridion extends Plugin {
 	app!: EnhancedApp;
 	settings: EnchiridionSettings = DEFAULT_SETTINGS;
-	marcus: Marcus = new Marcus(this);
 	cache: Cache = new Cache(this);
 	debug: Debug = new Debug(this);
 	files: Files = new Files(this);
@@ -40,11 +41,11 @@ export default class Enchiridion extends Plugin {
 		this.addSettingTab(new EnchiridionSettingsTab(this.app, this));
 
 		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
+			const {vault, metadataCache} = this.app;
 			const active = this.app.workspace.getActiveFile();
 			if (active) {
-				const parsed = await this.marcus.parseFile(active);
+				const parsed = await parseFile(active, vault, metadataCache);
 				this.debug.info('Processed file:', parsed);
-				this.debug.info('Find "languages"', this.marcus.resolveKey('Languages', parsed ))
 			}
 		} )
 

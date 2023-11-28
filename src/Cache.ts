@@ -51,7 +51,7 @@ export default class Cache {
 		if (null !== cached) {
 			return cached;
 		}
-		const fresh = await this.plugin.marcus.parseFile(file);
+		const fresh = await parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache);
 		this.cache.storeKey(file.path, fresh, file.stat.mtime)
 		return fresh;
 	}
@@ -85,7 +85,7 @@ export default class Cache {
 	}
 
 	async updateFile(file: TFile): Promise<Node> {
-		const fresh = await this.plugin.marcus.parseFile(file);
+		const fresh = await parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache);
 		this.cache.storeKey(file.path, fresh, file.stat.mtime)
 		return fresh;
 	}

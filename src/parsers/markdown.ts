@@ -1,10 +1,10 @@
 import {getLinkpath, MetadataCache, parseLinktext, resolveSubpath, TFile, Vault} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
+import {toMarkdown} from 'mdast-util-to-markdown';
 import {Heading, List, ListItem, Paragraph, RootContent} from 'mdast';
 import {Parent, Literal} from 'unist';
 import {toString} from 'mdast-util-to-string';
 import {snakeCase, difference, isEqual} from 'lodash';
-import {toMarkdown} from 'mdast-util-to-markdown';
 import {u} from 'unist-builder'
 import {normalizeHeadings} from 'mdast-normalize-headings'
 
