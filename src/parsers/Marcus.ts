@@ -1,4 +1,4 @@
-import {getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
+import {getLinkpath, MetadataCache, parseLinktext, resolveSubpath, TFile, Vault} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
 import {Heading, List, ListItem, Paragraph, RootContent} from 'mdast';
 import {Parent, Literal} from 'unist';
@@ -62,16 +62,10 @@ export type ListItemType = 'nested' | 'pair' | 'row' | 'invalid' | 'empty';
 export type ListType = 'row' | 'pair' | 'nested' | 'empty' | 'mixed' | 'invalid';
 
 export default class Marcus {
-	plugin: Enchiridion;
 
-	constructor(plugin: Enchiridion) {
-		this.plugin = plugin;
-	}
-
-	async parseFile( file: TFile) {
-		const {vault, metadataCache} = this.plugin.app;
+	async parseFile(file: TFile, vault: Vault, metadataCache: MetadataCache) {
 		// Collected all the content chunks for embeds, so we can easily get them later.
-		const embedContent = await this.getEmbedContent(file)
+		const embedContent = await this.getEmbedContent(file, vault, metadataCache)
 
 		let doc = await vault.cachedRead( file );
 
@@ -175,8 +169,7 @@ export default class Marcus {
 		return u('root', {name: stack[0].key}, stack[0].children)
 	}
 
-	async getEmbedContent( file: TFile ) {
-		const {metadataCache, vault} = this.plugin.app;
+	async getEmbedContent(file: TFile, vault: Vault, metadataCache: MetadataCache) {
 		const metacache = metadataCache.getFileCache(file);
 		if (!metacache) {
 			return Promise.resolve([]);
@@ -192,7 +185,7 @@ export default class Marcus {
 			if (subpath) {
 				const section = resolveSubpath(metadataCache.getFileCache(thisFile) || {}, subpath)
 				if (section.type === 'heading') {
-					content = await this.getSectionText(section.current.heading, thisFile);
+					content = await this.getSectionText(section.current.heading, thisFile, vault, metadataCache);
 				}
 			} else {
 				content = await vault.cachedRead(thisFile);
@@ -201,8 +194,7 @@ export default class Marcus {
 		}) );
 	}
 
-	async getSectionText( name: string, file: TFile ) {
-		const {metadataCache, vault} = this.plugin.app;
+	async getSectionText(name: string, file: TFile, vault: Vault, metadataCache: MetadataCache) {
 		const {headings} = metadataCache.getFileCache(file) || {};
 		if (!headings) {
 			// There are no headings to define sections.
