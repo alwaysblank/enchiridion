@@ -44,6 +44,7 @@ export default class Enchiridion extends Plugin {
 			if (active) {
 				const parsed = await this.marcus.parseFile(active);
 				this.debug.info('Processed file:', parsed);
+				this.debug.info('Find "languages"', this.marcus.resolveKey('Languages', parsed ))
 			}
 		} )
 

@@ -13,9 +13,12 @@ export interface Keyed {
 	key: string,
 }
 
+export type BasicTypes = Section | Collection | Pair | Row | Text;
+
 export interface Root extends Parent {
 	type: 'root',
 	name: string,
+	children: Array<BasicTypes>
 }
 
 export interface Row extends Literal {
@@ -36,6 +39,7 @@ export interface Pair extends Literal, Keyed {
 export interface Section extends Keyed, Parent {
 	type: 'section',
 	depth?: number,
+	children: Array<BasicTypes>,
 }
 
 /**
@@ -43,6 +47,7 @@ export interface Section extends Keyed, Parent {
  */
 export interface Collection extends Parent {
 	type: 'collection',
+	children: Array<BasicTypes>,
 }
 
 /**
@@ -75,7 +80,7 @@ export default class Marcus {
 
 		// If there are embeds to replace, use a regex to do so.
 		if (embedContent.length > 0) {
-			doc = doc.replaceAll(/!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?\]\]/g, (original) => {
+			doc = doc.replaceAll(/!\[\[([^#|\]]*)(?:#([^|\]]*))?(?:\|([^\]]*))?]]/g, (original) => {
 				const embedData = embedContent.find(entry => { return entry.original === original })
 
 				if (typeof embedData === 'undefined') {
@@ -428,9 +433,51 @@ export default class Marcus {
 		return <Empty>u('empty', '');
 	}
 
-	// findByKey(key: string, tree: ValidNode): ValidNode {
-	// 	tree.value
-	// 	if ('children' in tree) {
-	// 	}
-	// }
+	keysMatch(key: string, compare: string): boolean {
+		return this.normalizeKey(this.cleanKey(key)) === this.normalizeKey(this.cleanKey(compare));
+	}
+
+	/**
+	 * Retrieves a key from the tree, and attempts to resolve multiple instances.
+	 *
+	 * Note that the deduplication is relatively naive—it just compares
+	 * stringified objects—but it should handle relatively naive situations.
+	 *
+	 * @param {string} key The key to find. Not case-sensitive.
+	 * @param {BasicTypes} root The tree to search.
+	 */
+	resolveKey(key: string, root: BasicTypes | Root) {
+		const results = this.findByKey(key, root);
+		const compiled = new Map<string,BasicTypes>();
+		results.forEach((node) => {
+			if('value' in node) {
+				const key = JSON.stringify(node);
+				if (!compiled.has(key)) compiled.set(key, node);
+			} else if ('children' in node) {
+				node.children.forEach(node => {
+					const key = JSON.stringify(node);
+					if (!compiled.has(key)) compiled.set(key, node);
+				});
+			}
+		});
+		return Array.from(compiled.values());
+	}
+
+	findByKey(key: string, root: BasicTypes | Root) {
+		let results: Array<BasicTypes> = [];
+		if ('children' in root) {
+			root.children.forEach(node => {
+				if ('key' in node && this.keysMatch(node.key, key)) {
+					return results.push(node);
+				}
+				if('children' in node) {
+					const innerResults = this.findByKey(key, node);
+					if (innerResults.length > 0) {
+						results = [...results, ...innerResults];
+					}
+				}
+			})
+		}
+		return results;
+	}
 }
