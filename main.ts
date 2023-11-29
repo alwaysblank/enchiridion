@@ -41,10 +41,9 @@ export default class Enchiridion extends Plugin {
 		this.addSettingTab(new EnchiridionSettingsTab(this.app, this));
 
 		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
-			const {vault, metadataCache} = this.app;
 			const active = this.app.workspace.getActiveFile();
 			if (active) {
-				const parsed = await parseFile(active, vault, metadataCache);
+				const parsed = await getFileData(active, this);
 				this.debug.info('Processed file:', parsed);
 			}
 		} )
