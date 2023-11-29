@@ -1,5 +1,6 @@
 import {FuzzyMatch, FuzzySuggestModal, Notice, TFile} from 'obsidian';
 import Enchiridion from '../main';
+import {getTracked} from './files';
 
 export default class Search extends FuzzySuggestModal<TFile>{
 	plugin: Enchiridion;
@@ -12,7 +13,7 @@ export default class Search extends FuzzySuggestModal<TFile>{
 	}
 
 	getItems(): Array<TFile> {
-		return this.plugin.files.getTracked();
+		return getTracked(this.plugin);
 	}
 
 	onChooseItem(item: TFile): void {

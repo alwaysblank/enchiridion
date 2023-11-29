@@ -4,7 +4,7 @@ import {DEFAULT_SETTINGS} from './defaults';
 import {getSetting, putSetting} from './api';
 import {get} from 'lodash';
 
-export class EnchiridionSettingsTab extends PluginSettingTab {
+export class SettingsUI extends PluginSettingTab {
     #getSetting = <T,>(key: string | Array<string>, fallback?: T): T => {
         return getSetting<T>(
             key,

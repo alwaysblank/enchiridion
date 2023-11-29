@@ -3,7 +3,7 @@ import Cache from './src/Cache.js'
 import Debug from './src/Debug.js';
 import {getFileData} from './src/files.js';
 import Search from './src/Search.js';
-import {EnchiridionSettingsTab} from './src/settings/ui';
+import {SettingsUI} from './src/settings/SettingsUI';
 import {EnchiridionSettings} from './src/settings/settings';
 import {DEFAULT_SETTINGS} from './src/settings/defaults';
 
@@ -28,7 +28,7 @@ export default class Enchiridion extends Plugin {
 		await this.loadSettings();
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new EnchiridionSettingsTab(this));
+		this.addSettingTab(new SettingsUI(this));
 
 		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
 			const active = this.app.workspace.getActiveFile();
