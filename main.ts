@@ -1,15 +1,12 @@
-import {App, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {App, Plugin} from 'obsidian';
 import Cache from './src/Cache.js'
 import Debug from './src/Debug.js';
-import Files from './src/Files.js';
+import {getFileData} from './src/files.js';
 import Search from './src/Search.js';
-import {parseFile} from './src/parsers/markdown.js';
+import {EnchiridionSettingsTab} from './src/settings/ui';
+import {EnchiridionSettings} from './src/settings/settings';
+import {DEFAULT_SETTINGS} from './src/settings/defaults';
 
-interface EnchiridionSettings {
-	debug: {
-		log: boolean,
-	}
-}
 
 export type EnhancedApp = App & {
 	appId: number, // This prop exists, but is not officially documented, so we must add it.
@@ -17,18 +14,11 @@ export type EnhancedApp = App & {
 	saveLocalStorage: (key: string, value: any) => void, // Undocumented core function.
 }
 
-const DEFAULT_SETTINGS: EnchiridionSettings = {
-	debug: {
-		log: false,
-	}
-}
-
 export default class Enchiridion extends Plugin {
 	app!: EnhancedApp;
 	settings: EnchiridionSettings = DEFAULT_SETTINGS;
 	cache: Cache = new Cache(this);
 	debug: Debug = new Debug(this);
-	files: Files = new Files(this);
 	search: Search = new Search(this);
 
 	/**
@@ -38,7 +28,7 @@ export default class Enchiridion extends Plugin {
 		await this.loadSettings();
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new EnchiridionSettingsTab(this.app, this));
+		this.addSettingTab(new EnchiridionSettingsTab(this));
 
 		this.addRibbonIcon( 'info', 'Parse Current File', async () => {
 			const active = this.app.workspace.getActiveFile();
@@ -70,28 +60,3 @@ export default class Enchiridion extends Plugin {
 }
 
 
-class EnchiridionSettingsTab extends PluginSettingTab {
-	plugin: Enchiridion;
-
-	constructor(app: App, plugin: Enchiridion) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Show Debug Logs')
-			.setDesc('Output debug logging to console (otherwise logs are suppressed).')
-			.addToggle( toggle => toggle
-				.setValue(this.plugin.settings.debug.log)
-				.onChange(value => {
-					this.plugin.settings.debug.log = value
-					this.plugin.saveSettings();
-				})
-			);
-	}
-}
