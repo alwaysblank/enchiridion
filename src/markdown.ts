@@ -14,7 +14,7 @@ export interface Keyed {
 
 export type BasicTypes = Section | Collection | Pair | Row | Text;
 
-export interface Root extends Parent {
+export interface DocumentTree extends Parent {
 	type: 'root',
 	name: string,
 	children: Array<BasicTypes>
@@ -108,7 +108,7 @@ export async function parseFile(file: TFile, vault: Vault, metadataCache: Metada
  * This expects *only* Markdown; Strip frontmatter before passing to this
  * method.
  */
-export function parseDocument( document: string): Root|Empty {
+export function parseDocument( document: string): DocumentTree|Empty {
 	const tree = fromMarkdown(document)
 
 	// Make sure all heading structures make sense.
@@ -474,7 +474,7 @@ export function deduplicateNodeList(list: Array<BasicTypes>): Array<BasicTypes> 
 	return deduped;
 }
 
-export function findByKey(key: string, root: BasicTypes | Root) {
+export function findByKey(key: string, root: BasicTypes | DocumentTree) {
 	let results: Array<BasicTypes> = [];
 	if ('children' in root) {
 		root.children.forEach(node => {
@@ -499,9 +499,9 @@ export function findByKey(key: string, root: BasicTypes | Root) {
  * the fill path must match.
  *
  * @param {Array<string>} path A path of key names.
- * @param {BasicTypes | Root} root The tree to search.
+ * @param {BasicTypes | DocumentTree} root The tree to search.
  */
-export function findByPath(path: Array<string>, root: BasicTypes | Root): Array<BasicTypes> {
+export function findByPath(path: Array<string>, root: BasicTypes | DocumentTree): Array<BasicTypes> {
 	if (path.length === 1) {
 		return findByKey(path[0], root);
 	}
