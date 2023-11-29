@@ -3,7 +3,7 @@ import Enchiridion from '../main.js';
 import {Node} from 'unist';
 import {Database} from './vendor/obsidian-database-library/index.js'
 import {u} from 'unist-builder';
-import {parseFile} from './parsers/markdown.js';
+import {parseFile} from './markdown.js';
 
 export type Cached<T> = {
 	timestamp: number,
@@ -17,10 +17,10 @@ export default class Cache {
 		this.plugin = plugin;
 		this.cache = new Database(
 			this.plugin,
-			`enchiridion/cache/${this.plugin.app.appId}`,
-			'Enchiridion Cache',
+			`enchiridion/data/${this.plugin.app.appId}`,
+			'Enchiridion Data Cache',
 			1,
-			'Contains files converted into generic trees.',
+			'Caches node trees after parsing from markdown.',
 			(): Node => u('empty'),
 			async (file: TFile) => parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache),
 			(file: TFile) => {
@@ -43,13 +43,13 @@ export default class Cache {
 	/**
 	 * Return the cached representation of the file.
 	 *
-	 * Note that this will automatically trigger and update if the file is out
-	 * of date, so this method can be trusted to always return "correct" data.
+	 * Note that this will automatically trigger an update if the file is out
+	 * of date or doesn't exist in the cache.
 	 */
 	async getFile(file: TFile): Promise<Node> {
-		const cached = this.maybeGetFile(file);
-		if (null !== cached) {
-			return cached;
+		const cached = this.cache.getItem(file.path);
+		if (null !== cached && cached.mtime === file.stat.mtime) {
+			return cached.data;
 		}
 		const fresh = await parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache);
 		this.cache.storeKey(file.path, fresh, file.stat.mtime)
@@ -59,15 +59,11 @@ export default class Cache {
 	/**
 	 * Get the file if it's in the cache; null otherwise.
 	 *
-	 * The advantage of this method over {@link Cache.getFile()} is that its synchronous
-	 * and doesn't require you to wait.
+	 * The advantage of this method over {@link Cache.getFile()} is that it's
+	 * synchronous and doesn't require you to wait.
 	 */
 	maybeGetFile(file: TFile): Node|null {
-		const item = this.cache.getItem(file.path);
-		if (item) {
-			return item.data;
-		}
-		return null;
+		return this.cache.getValue(file.path);
 	}
 
 	/**
