@@ -190,6 +190,8 @@ export async function getEmbedContent(file: TFile, plugin: Enchiridion) {
 			const section = resolveSubpath(metadataCache.getFileCache(thisFile) || {}, subpath)
 			if (section.type === 'heading') {
 				content = await getSectionText(section.current.heading, thisFile, plugin);
+			} else if (section.type === 'block') {
+				content = await getBlockText(section.block.id, thisFile, plugin);
 			}
 		} else {
 			content = await vault.cachedRead(thisFile);
@@ -198,7 +200,22 @@ export async function getEmbedContent(file: TFile, plugin: Enchiridion) {
 	}) );
 }
 
-export async function getSectionText(name: string, file: TFile, vault: Vault, metadataCache: MetadataCache) {
+export async function getBlockText(name: string, file: TFile, plugin: Enchiridion) {
+	const {vault, metadataCache: metacache} = plugin.app;
+	const {blocks} = metacache.getFileCache(file) || {};
+	if (!blocks || !blocks[name]) {
+		return ''; // No defined blocks.
+	}
+	const {position:{start:{line: startLine}, end:{line: endLine}}} = blocks[name];
+	const document = await vault.cachedRead(file);
+	const byLine = document.split('\n');
+	const block = byLine.slice(startLine, endLine + 1);
+	return block.join('\n')
+		.replace(`^${name}`, ''); // Remove the block identifier from the string.
+}
+
+export async function getSectionText(name: string, file: TFile, plugin: Enchiridion) {
+	const {vault, metadataCache} = plugin.app;
 	const {headings} = metadataCache.getFileCache(file) || {};
 	if (!headings) {
 		// There are no headings to define sections.
