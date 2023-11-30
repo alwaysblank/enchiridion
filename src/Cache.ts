@@ -22,7 +22,7 @@ export default class Cache {
 			1,
 			'Caches node trees after parsing from markdown.',
 			(): Node => u('empty'),
-			async (file: TFile) => parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache),
+			async (file: TFile) => parseFile(file, this.plugin),
 			(file: TFile) => {
 				const { app: {metadataCache}} = this.plugin;
 				const {frontmatter} = metadataCache.getFileCache(file) || {frontmatter: {enchiridion: false}};
@@ -51,7 +51,7 @@ export default class Cache {
 		if (null !== cached && cached.mtime === file.stat.mtime) {
 			return cached.data;
 		}
-		const fresh = await parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache);
+		const fresh = await parseFile(file, this.plugin);
 		this.cache.storeKey(file.path, fresh, file.stat.mtime)
 		return fresh;
 	}
@@ -81,7 +81,7 @@ export default class Cache {
 	}
 
 	async updateFile(file: TFile): Promise<Node> {
-		const fresh = await parseFile(file, this.plugin.app.vault, this.plugin.app.metadataCache);
+		const fresh = await parseFile(file, this.plugin);
 		this.cache.storeKey(file.path, fresh, file.stat.mtime)
 		return fresh;
 	}

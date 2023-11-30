@@ -1,4 +1,4 @@
-import {getLinkpath, MetadataCache, parseLinktext, resolveSubpath, TFile, Vault} from 'obsidian';
+import {getLinkpath, parseLinktext, resolveSubpath, TFile} from 'obsidian';
 import {fromMarkdown} from 'mdast-util-from-markdown'
 import {toMarkdown} from 'mdast-util-to-markdown';
 import {Heading, List, ListItem, Paragraph, RootContent} from 'mdast';
@@ -7,6 +7,7 @@ import {toString} from 'mdast-util-to-string';
 import {snakeCase, difference, isEqual} from 'lodash';
 import {u} from 'unist-builder'
 import {normalizeHeadings} from 'mdast-normalize-headings'
+import Enchiridion from '../main';
 
 export interface Keyed {
 	key: string,
@@ -64,9 +65,10 @@ export type ListItemType = 'nested' | 'pair' | 'row' | 'invalid' | 'empty';
 export type ListType = 'row' | 'pair' | 'nested' | 'empty' | 'mixed' | 'invalid';
 
 
-export async function parseFile(file: TFile, vault: Vault, metadataCache: MetadataCache) {
+export async function parseFile(file: TFile, plugin: Enchiridion) {
+	const {vault, metadataCache} = plugin.app;
 	// Collected all the content chunks for embeds, so we can easily get them later.
-	const embedContent = await getEmbedContent(file, vault, metadataCache)
+	const embedContent = await getEmbedContent(file, plugin)
 
 	let doc = await vault.cachedRead( file );
 
@@ -170,7 +172,8 @@ export function parseDocument( document: string): DocumentTree|Empty {
 	return u('root', {name: stack[0].key}, stack[0].children)
 }
 
-export async function getEmbedContent(file: TFile, vault: Vault, metadataCache: MetadataCache) {
+export async function getEmbedContent(file: TFile, plugin: Enchiridion) {
+	const {vault, metadataCache} = plugin.app;
 	const metacache = metadataCache.getFileCache(file);
 	if (!metacache) {
 		return Promise.resolve([]);
@@ -186,7 +189,7 @@ export async function getEmbedContent(file: TFile, vault: Vault, metadataCache: 
 		if (subpath) {
 			const section = resolveSubpath(metadataCache.getFileCache(thisFile) || {}, subpath)
 			if (section.type === 'heading') {
-				content = await getSectionText(section.current.heading, thisFile, vault, metadataCache);
+				content = await getSectionText(section.current.heading, thisFile, plugin);
 			}
 		} else {
 			content = await vault.cachedRead(thisFile);
@@ -431,7 +434,7 @@ export function keysMatch(key: string, compare: string): boolean {
 }
 
 /**
- * Attempts to merge results of {@link Markdown.findByKey()} or {@link Markdown.findByPath()}.
+ * Attempts to merge results of {@link findByKey()} or {@link findByPath()}.
  *
  * This combines all item results in a single set of items, de-duplicating
  * items that appear to be the same. It determines

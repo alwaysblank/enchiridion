@@ -14,7 +14,6 @@ export interface EFile {
 export async function getFileData(file: TFile, plugin: Enchiridion): Promise<null | EFile> {
     const {
 		app: {
-			vault: vault,
 			metadataCache: metacache,
 		},
 		settings: {
@@ -28,7 +27,7 @@ export async function getFileData(file: TFile, plugin: Enchiridion): Promise<nul
         throw new TypeError('File is not a valid Enchiridion file.');
     }
     const frontmatter = get(metacache.getFileCache(file), 'frontmatter', {});
-    const data: DocumentTree | Empty = await parseFile(file, vault, metacache);
+    const data: DocumentTree | Empty = await parseFile(file, plugin);
     if (data.type !== 'empty') {
         return {
             tree: data,
