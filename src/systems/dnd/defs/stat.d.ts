@@ -1,7 +1,7 @@
 import {Mod} from '../../../dataTypes/dice';
 
-export interface Stat<Name extends StatName> {
-    name: Name,
+export interface Stat {
+    name: StatName,
     score: number,
     mod: Mod,
 }

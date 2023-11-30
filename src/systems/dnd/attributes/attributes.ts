@@ -20,6 +20,13 @@ import reactions from './reactions';
 import role from './role';
 import senses from './senses';
 import size from './size';
+import skills from './skills';
+import speed from './speed';
+import stats from './stats';
+import source from './source';
+import traits from './traits';
+import creatureType from './creature_type';
+import creatureTags from './creature_tags';
 
 export interface Attribute<Key extends keyof Creature> {
     key: Key,
@@ -90,6 +97,13 @@ const attributes: Array<Attribute<keyof Creature>> = [
     role,
     senses,
     size,
+    skills,
+    source,
+    speed,
+    stats,
+    traits,
+    creatureType,
+    creatureTags,
 ];
 
 export default attributes;

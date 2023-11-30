@@ -1,11 +1,12 @@
 import {Mod, Roll} from '../../../dataTypes/dice';
 import {Sense} from './sense';
-import {Skill} from './skill';
-import {Stat} from './stat';
 import {Entity} from '../../../dataTypes/Entity';
 import {Condition} from '../attributes/conditions';
 import {Damage} from '../attributes/damage';
 import {Size} from '../attributes/size';
+import {Skill} from '../attributes/skills';
+import {Speed, SpeedType} from '../attributes/speed';
+import {Stat, StatName} from '../attributes/stats';
 
 export interface Action {
     name: string,
@@ -52,33 +53,21 @@ export interface Creature extends Entity {
     senses?: Array<Sense>,
     size?: Size,
     skills?: Array<Skill>,
-    speed: {
-        walk: number,
-        climb?: number,
-        swim?: number,
-        fly?: number,
-        jump?: number
-    },
+    speed: {[Property in SpeedType]?: Speed},
     source?: {
-        name: string,
+        name?: string,
         page?: number | URL,
     },
-    stats: {
-        str: Stat<'str'>,
-        dex: Stat<'dex'>,
-        con: Stat<'con'>,
-        int: Stat<'int'>,
-        wis: Stat<'wis'>,
-        cha: Stat<'cha'>,
-    },
+    stats: {[Property in StatName]?: Stat},
     traits?: Array<Trait>,
-    type?: {
-        name: string,
-        tags?: Array<string>,
-    },
+    creature_type?: string,
+    creature_tags?: Array<string>,
+    /**
+     * Holding off on these for a bit.
     villain_actions?: [
         VillainAction<1>,
         VillainAction<2>,
         VillainAction<3>,
     ]
+    */
 }
