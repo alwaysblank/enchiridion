@@ -3,9 +3,9 @@ import {Sense} from './sense';
 import {Skill} from './skill';
 import {Stat} from './stat';
 import {Entity} from '../../../dataTypes/Entity';
-import conditions from '../attributes/conditions';
-import damage from '../attributes/damage';
-import {senseTypes} from '../attributes/senses';
+import {Condition} from '../attributes/conditions';
+import {Damage} from '../attributes/damage';
+import {Size} from '../attributes/size';
 
 export interface Action {
     name: string,
@@ -28,8 +28,6 @@ export type Alignment =
     'lawful evil' | 'lawful neutral' | 'lawful good' |
     'unaligned';
 
-export type Size = 'microscopic' | 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan' | 'inconceivable';
-
 export type VillainActionOrder = 1 | 2 | 3;
 
 export interface Creature extends Entity {
@@ -37,10 +35,10 @@ export interface Creature extends Entity {
     actions?: Array<Action>,
     alignment?: Alignment,
     bonus_actions?: Array<Action>,
-    condition_immunity?: typeof conditions,
+    condition_immunity?: Array<Condition>,
     cr: number,
-    damage_immunity?: typeof damage,
-    damage_vulnerability?: typeof damage,
+    damage_immunity?: Array<Damage>,
+    damage_vulnerability?: Array<Damage>,
     environment?: Array<string>,
     hp: number,
     hit_dice?: Roll,
@@ -51,8 +49,8 @@ export interface Creature extends Entity {
     proficiency_bonus?: Mod,
     reactions?: Array<Action>,
     role?: string,
-    senses?: typeof senseTypes,
-    size: Size,
+    senses?: Array<Sense>,
+    size?: Size,
     skills?: Array<Skill>,
     speed: {
         walk: number,

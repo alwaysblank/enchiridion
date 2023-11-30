@@ -43,12 +43,3 @@ export function creature(document: DocumentTree): Partial<Creature> {
     return creature;
 }
 
-
-
-
-
-
-
-
-
-

@@ -19,6 +19,7 @@ import proficiencyBonus from './proficiency_bonus';
 import reactions from './reactions';
 import role from './role';
 import senses from './senses';
+import size from './size';
 
 export interface Attribute<Key extends keyof Creature> {
     key: Key,
@@ -88,6 +89,7 @@ const attributes: Array<Attribute<keyof Creature>> = [
     reactions,
     role,
     senses,
+    size,
 ];
 
 export default attributes;
