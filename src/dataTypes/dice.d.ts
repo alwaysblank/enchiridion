@@ -5,11 +5,12 @@ export interface Roll {
 
 export interface Die {
     sides: 2 | 4 | 6 | 8 | 10 | 12 | 20 | 100;
-    // count: number;
+    count: number;
+    operator?: '+' | '-',
 }
 
 export interface Mod {
-    sign?: '+' | '-',
+    operator?: '+' | '-',
     value: number,
     source?: Array<[string, Mod]>
 }

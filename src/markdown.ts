@@ -22,14 +22,17 @@ export interface DocumentTree extends Parent {
 
 export interface Row extends Literal {
 	type: 'row',
+	value: string | number,
 }
 
 export interface Text extends Literal {
 	type: 'text',
+	value: string,
 }
 
 export interface Pair extends Literal, Keyed {
 	type: 'pair',
+	value: string | number,
 }
 
 /**
@@ -416,7 +419,7 @@ export function cleanValue( value: string ): string {
 }
 
 export function normalizeKey( key: string ): string {
-	return snakeCase(key);
+	return snakeCase(cleanValue(key));
 }
 
 export function makeEmptyNode(): Empty {

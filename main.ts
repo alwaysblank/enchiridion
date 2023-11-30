@@ -6,6 +6,7 @@ import Search from './src/Search.js';
 import {SettingsUI} from './src/settings/SettingsUI';
 import {EnchiridionSettings} from './src/settings/settings';
 import {DEFAULT_SETTINGS} from './src/settings/defaults';
+import {ingest} from './src/systems/dnd/5e';
 
 
 export type EnhancedApp = App & {
@@ -34,7 +35,7 @@ export default class Enchiridion extends Plugin {
 			const active = this.app.workspace.getActiveFile();
 			if (active) {
 				const parsed = await getFileData(active, this);
-				this.debug.info('Processed file:', parsed);
+				this.debug.info('Processed file:', ingest(parsed));
 			}
 		} )
 

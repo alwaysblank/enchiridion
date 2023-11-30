@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@airjp73/dice-notation": "^2.2.2",
 		"@types/mdast": "^4.0.3",
+		"esbuild-plugin-inline-worker": "https://github.com/mitschabaude/esbuild-plugin-inline-worker",
 		"localforage": "^1.10.0",
 		"localforage-getitems": "^1.4.2",
 		"localforage-setitems": "^1.4.0",
@@ -41,8 +42,8 @@
 		"mdast-util-to-string": "^4.0.0",
 		"micromark-extension-frontmatter": "^2.0.0",
 		"unist-builder": "^4.0.0",
+		"unist-util-is": "^6.0.0",
 		"unist-util-select": "^5.1.0",
-		"unist-util-visit-parents": "^6.0.1",
-		"esbuild-plugin-inline-worker": "https://github.com/mitschabaude/esbuild-plugin-inline-worker"
+		"unist-util-visit-parents": "^6.0.1"
 	}
 }
