@@ -3,6 +3,12 @@ import {BasicTypes} from '../../../markdown';
 import {Creature} from '../defs/creature';
 import {toString} from 'mdast-util-to-string';
 
+
+export interface Trait {
+    name: string,
+    description: string,
+}
+
 const traits: Attribute<'traits'> = {
     key: 'traits',
     aliases: ['creature traits', 'npc traits'],

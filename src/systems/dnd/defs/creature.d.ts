@@ -8,21 +8,13 @@ import {Skill} from '../attributes/skills';
 import {Speed, SpeedType} from '../attributes/speed';
 import {Stat, StatName} from '../attributes/stats';
 import {Alignment} from '../attributes/alignment';
-
-export interface Action {
-    name: string,
-    type?: string,
-    text: string,
-}
+import {Action} from '../attributes/actions';
+import {Trait} from '../attributes/traits';
 
 export interface VillainAction<Order extends VillainActionOrder> extends Action {
     order: Order,
 }
 
-export interface Trait {
-    name: string,
-    description: string,
-}
 
 export type VillainActionOrder = 1 | 2 | 3;
 
