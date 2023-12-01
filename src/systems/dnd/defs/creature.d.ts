@@ -7,6 +7,7 @@ import {Size} from '../attributes/size';
 import {Skill} from '../attributes/skills';
 import {Speed, SpeedType} from '../attributes/speed';
 import {Stat, StatName} from '../attributes/stats';
+import {Alignment} from '../attributes/alignment';
 
 export interface Action {
     name: string,
@@ -22,12 +23,6 @@ export interface Trait {
     name: string,
     description: string,
 }
-
-export type Alignment =
-    'chaotic evil' | 'chaotic neutral' | 'chaotic good' |
-    'neutral evil' | 'true neutral' | 'neutral good' |
-    'lawful evil' | 'lawful neutral' | 'lawful good' |
-    'unaligned';
 
 export type VillainActionOrder = 1 | 2 | 3;
 
