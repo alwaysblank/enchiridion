@@ -1,7 +1,7 @@
 import {stringsProbablyMatch} from '../../../utils';
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 import {toInteger} from 'lodash';
 
 export const speedTypes = ['walk', 'fly', 'burrow', 'swim', 'jump', 'climb'] as const;

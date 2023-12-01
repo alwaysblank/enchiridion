@@ -1,7 +1,7 @@
 import {Mod} from '../../../dataTypes/dice';
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 import {cleanString, stringsProbablyMatch} from '../../../utils';
 import {toInteger} from 'lodash';
 

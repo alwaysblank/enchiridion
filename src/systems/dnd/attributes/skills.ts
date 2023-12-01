@@ -1,6 +1,6 @@
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 import {StatName} from '../defs/stat';
 import {Mod} from '../../../dataTypes/dice';
 import {stringsProbablyMatch} from '../../../utils';

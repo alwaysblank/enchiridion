@@ -1,7 +1,7 @@
 import {Attribute} from './attributes';
 import {cleanString, stringsProbablyMatch} from '../../../utils';
 import {BasicTypes} from '../../../markdown';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 import {toString} from 'mdast-util-to-string';
 
 export type Alignment = typeof alignments[number];

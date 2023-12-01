@@ -1,6 +1,6 @@
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 import {toString} from 'mdast-util-to-string';
 import {toInteger} from 'lodash';
 

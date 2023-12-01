@@ -2,7 +2,7 @@ import {cleanString} from '../../../utils';
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
 import {toString} from 'mdast-util-to-string';
-import {Creature} from '../defs/creature';
+import {Creature} from '../entity/creature';
 
 export type Size = typeof sizes[number];
 

@@ -1,9 +1,8 @@
-import {Action, Creature} from '../defs/creature';
 import {BasicTypes, DocumentTree} from '../../../markdown';
 import {toString} from 'mdast-util-to-string';
 import {toInteger} from 'lodash';
 import ac from './ac';
-import actions from './actions';
+import actions, {Action} from './actions';
 import bonusActions from './bonus_actions';
 import conditionImmunity from './condition_immunity';
 import alignment from './alignment';
@@ -28,6 +27,7 @@ import traits from './traits';
 import creatureType from './creature_type';
 import creatureTags from './creature_tags';
 import villainActions from './villain_actions';
+import {Creature} from '../entity/creature';
 
 export interface Attribute<Key extends keyof Creature> {
     key: Key,

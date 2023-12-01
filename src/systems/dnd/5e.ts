@@ -1,5 +1,5 @@
 import {EFile} from '../../files';
-import {creature} from './entity/Creature';
+import {creature} from './entity/creature';
 
 export function ingest(document: EFile | null) {
     if (!document || !('settings' in document)) {
