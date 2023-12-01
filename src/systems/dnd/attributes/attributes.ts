@@ -27,6 +27,7 @@ import source from './source';
 import traits from './traits';
 import creatureType from './creature_type';
 import creatureTags from './creature_tags';
+import villainActions from './villain_actions';
 
 export interface Attribute<Key extends keyof Creature> {
     key: Key,
@@ -85,6 +86,8 @@ const attributes: Array<Attribute<keyof Creature>> = [
     bonusActions,
     conditionImmunity,
     cr,
+    creatureType,
+    creatureTags,
     damageImmunity,
     damageVulnerability,
     environment,
@@ -102,8 +105,7 @@ const attributes: Array<Attribute<keyof Creature>> = [
     speed,
     stats,
     traits,
-    creatureType,
-    creatureTags,
+    villainActions,
 ];
 
 export default attributes;

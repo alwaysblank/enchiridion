@@ -10,13 +10,10 @@ import {Stat, StatName} from '../attributes/stats';
 import {Alignment} from '../attributes/alignment';
 import {Action} from '../attributes/actions';
 import {Trait} from '../attributes/traits';
-
-export interface VillainAction<Order extends VillainActionOrder> extends Action {
-    order: Order,
-}
+import {VillainAction} from '../attributes/villain_actions';
 
 
-export type VillainActionOrder = 1 | 2 | 3;
+
 
 export interface Creature extends Entity {
     ac: number;
@@ -49,12 +46,5 @@ export interface Creature extends Entity {
     traits?: Array<Trait>,
     creature_type?: string,
     creature_tags?: Array<string>,
-    /**
-     * Holding off on these for a bit.
-    villain_actions?: [
-        VillainAction<1>,
-        VillainAction<2>,
-        VillainAction<3>,
-    ]
-    */
+    villain_actions?: Array<VillainAction>
 }
