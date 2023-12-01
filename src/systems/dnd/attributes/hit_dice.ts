@@ -3,7 +3,7 @@ import {BasicTypes} from '../../../markdown';
 import {Creature} from '../entity/creature';
 import {tokenize} from '@airjp73/dice-notation';
 import {toString} from 'mdast-util-to-string';
-import {Die, Mod, Roll} from '../../../dataTypes/dice';
+import {Die, Mod, Roll} from '../../../types/dice';
 
 const hitDice: Attribute<'hit_dice'> = {
     key: 'hit_dice',

@@ -2,7 +2,7 @@ import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
 import {Creature} from '../entity/creature';
 import {StatName} from '../defs/stat';
-import {Mod} from '../../../dataTypes/dice';
+import {Mod} from '../../../types/dice';
 import {stringsProbablyMatch} from '../../../utils';
 import {toString} from 'mdast-util-to-string';
 

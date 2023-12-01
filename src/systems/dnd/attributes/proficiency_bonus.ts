@@ -3,7 +3,7 @@ import {BasicTypes} from '../../../markdown';
 import {Creature} from '../entity/creature';
 import {toString} from 'mdast-util-to-string';
 import {toInteger} from 'lodash';
-import {Mod} from '../../../dataTypes/dice';
+import {Mod} from '../../../types/dice';
 
 const proficiencyBonus: Attribute<'proficiency_bonus'> = {
     key: 'proficiency_bonus',

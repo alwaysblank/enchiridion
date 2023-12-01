@@ -1,4 +1,4 @@
-import {EnchiridionSettings} from './settings';
+import {EnchiridionSettings} from '../types/settings';
 
 export const DEFAULT_SETTINGS: EnchiridionSettings = {
     debug: {

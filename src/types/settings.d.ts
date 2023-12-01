@@ -1,4 +1,3 @@
-
 export interface EnchiridionSettings {
     debug: {
         log: boolean,

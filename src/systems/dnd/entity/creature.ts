@@ -5,19 +5,19 @@ import {
 } from '../../../markdown';
 import {toString} from 'mdast-util-to-string';
 import attributes, {Attribute} from '../attributes/attributes';
-import {Entity} from '../../../dataTypes/Entity';
+import {Entity} from '../../../types/entity';
 import {Action} from '../attributes/actions';
 import {Alignment} from '../attributes/alignment';
 import {Condition} from '../attributes/conditions';
 import {Damage} from '../attributes/damage';
-import {Mod, Roll} from '../../../dataTypes/dice';
-import {Sense} from '../defs/sense';
+import {Mod, Roll} from '../../../types/dice';
 import {Size} from '../attributes/size';
 import {Skill} from '../attributes/skills';
 import {Speed, SpeedType} from '../attributes/speed';
 import {Stat, StatName} from '../attributes/stats';
 import {Trait} from '../attributes/traits';
 import {VillainAction} from '../attributes/villain_actions';
+import {Sense} from '../attributes/senses';
 
 export interface Creature extends Entity {
     ac: number;

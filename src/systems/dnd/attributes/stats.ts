@@ -1,4 +1,4 @@
-import {Mod} from '../../../dataTypes/dice';
+import {Mod} from '../../../types/dice';
 import {Attribute} from './attributes';
 import {BasicTypes} from '../../../markdown';
 import {Creature} from '../entity/creature';
